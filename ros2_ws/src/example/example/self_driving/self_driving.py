@@ -26,13 +26,15 @@ from example.self_driving import lane_detect
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
 from ros_robot_controller_msgs.msg import BuzzerState, SetPWMServoState, PWMServoState
+from example.self_driving.self_driving_button import ButtonPressReceiver  # Import ButtonPressReceiver
+from ros_robot_controller_msgs.msg import ButtonState
 
 class SelfDrivingNode(Node):
     def __init__(self, name):
         rclpy.init()
         super().__init__(name, allow_undeclared_parameters=True, automatically_declare_parameters_from_overrides=True)
         self.name = name
-        self.is_running = True
+        self.is_running = False
         self.pid = pid.PID(0.4, 0.0, 0.05)
         self.param_init()
 
@@ -54,6 +56,12 @@ class SelfDrivingNode(Node):
         self.create_service(Trigger, '~/enter', self.enter_srv_callback) # enter the game
         self.create_service(Trigger, '~/exit', self.exit_srv_callback) # exit the game
         self.create_service(SetBool, '~/set_running', self.set_running_srv_callback)
+
+        # ButtonPressReceiver integration
+        self.button_receiver = ButtonPressReceiver('button_press_receiver')
+        self.button_receiver.create_subscription(ButtonState, '/ros_robot_controller/button', self.button_callback, 10)
+
+
         # self.heart = Heart(self.name + '/heartbeat', 5, lambda _: self.exit_srv_callback(None))
         timer_cb_group = ReentrantCallbackGroup()
         self.client = self.create_client(Trigger, '/yolov5_ros2/init_finish')
@@ -64,6 +72,30 @@ class SelfDrivingNode(Node):
         self.stop_yolov5_client.wait_for_service()
 
         self.timer = self.create_timer(0.0, self.init_process, callback_group=timer_cb_group)
+
+    def button_callback(self, msg):
+        if msg.id == 1 and msg.state == 1:  # Button 1 short press
+            self.get_logger().info("Button 1 pressed, starting self-driving")
+            self.is_running = True  # Start the self-driving process
+        elif msg.id == 2 and msg.state == 1:  # Button 1 short press
+            self.get_logger().info("Button 2 pressed, stop self-driving")
+            self.is_running = False  # Start the self-driving process
+            self.reset_motor_position()  # Call the reset motor position function
+
+
+    def reset_motor_position(self):
+        """
+        Reset the motor position to 0.
+        """
+        twist = Twist()
+        twist.linear.x = 0.0
+        twist.linear.y = 0.0
+        twist.linear.z = 0.0
+        twist.angular.x = 0.0
+        twist.angular.y = 0.0
+        twist.angular.z = 0.0
+        self.mecanum_pub.publish(twist)  # Publish the zeroed Twist message
+        self.get_logger().info("Motor position reset to 0")
 
     def init_process(self):
         self.timer.cancel()
@@ -228,8 +260,10 @@ class SelfDrivingNode(Node):
         self.mecanum_pub.publish(Twist())
 
     def main(self):
-        self.get_logger().info('------ install')
-
+        while not self.is_running:  # Wait for button press
+            self.get_logger().info("Waiting for button press to start...")
+            time.sleep(1)
+    
         while self.is_running:
             time_start = time.time()
             try:
@@ -390,6 +424,7 @@ def main():
     node = SelfDrivingNode('self_driving')
     executor = MultiThreadedExecutor()
     executor.add_node(node)
+    executor.add_node(node.button_receiver)  # Add ButtonPressReceiver to the executor
     executor.spin()
     node.destroy_node()
  
