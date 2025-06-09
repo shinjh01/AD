@@ -228,6 +228,8 @@ class SelfDrivingNode(Node):
         self.mecanum_pub.publish(Twist())
 
     def main(self):
+        self.get_logger().info('------ install')
+
         while self.is_running:
             time_start = time.time()
             try:
