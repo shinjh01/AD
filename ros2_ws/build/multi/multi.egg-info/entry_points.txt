@@ -1,0 +1,6 @@
+[console_scripts]
+costmap_publish = multi.costmap_publish:main
+formation_update = multi.formation_update:main
+slave_tf_listener = multi.slave_tf_listener:main
+tf_listen = multi.tf_listen:main
+tf_publish = multi.tf_publish:main

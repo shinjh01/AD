@@ -1,0 +1,1 @@
+/home/ubuntu/ros2_ws/src/navigation/launch/rviz_rtabmap_navigation.launch.py

@@ -1,0 +1,1 @@
+/home/ubuntu/ros2_ws/build/interfaces/rosidl_typesupport_introspection_cpp/interfaces/srv/detail/set_string_list__rosidl_typesupport_introspection_cpp.hpp

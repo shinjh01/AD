@@ -1,0 +1,1 @@
+/home/ubuntu/ros2_ws/build/interfaces/rosidl_typesupport_introspection_c/interfaces/srv/detail/get_pose__rosidl_typesupport_introspection_c.h

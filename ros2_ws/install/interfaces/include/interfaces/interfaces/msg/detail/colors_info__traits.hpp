@@ -1,0 +1,1 @@
+/home/ubuntu/ros2_ws/build/interfaces/rosidl_generator_cpp/interfaces/msg/detail/colors_info__traits.hpp

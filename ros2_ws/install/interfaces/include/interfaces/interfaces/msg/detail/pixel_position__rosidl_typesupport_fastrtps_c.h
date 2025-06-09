@@ -1,0 +1,1 @@
+/home/ubuntu/ros2_ws/build/interfaces/rosidl_typesupport_fastrtps_c/interfaces/msg/detail/pixel_position__rosidl_typesupport_fastrtps_c.h

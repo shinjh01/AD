@@ -1,0 +1,1 @@
+/home/ubuntu/ros2_ws/build/interfaces/rosidl_generator_cpp/interfaces/srv/detail/get_pose__traits.hpp

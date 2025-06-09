@@ -1,0 +1,1 @@
+/home/ubuntu/ros2_ws/build/ros_robot_controller_msgs/ament_cmake_python/ros_robot_controller_msgs/ros_robot_controller_msgs.egg-info/SOURCES.txt

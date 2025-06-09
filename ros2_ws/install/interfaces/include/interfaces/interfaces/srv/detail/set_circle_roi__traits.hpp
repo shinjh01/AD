@@ -1,0 +1,1 @@
+/home/ubuntu/ros2_ws/build/interfaces/rosidl_generator_cpp/interfaces/srv/detail/set_circle_roi__traits.hpp

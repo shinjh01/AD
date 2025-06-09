@@ -1,0 +1,1 @@
+/home/ubuntu/ros2_ws/build/ros_robot_controller_msgs/rosidl_typesupport_introspection_c/ros_robot_controller_msgs/msg/detail/motor_state__rosidl_typesupport_introspection_c.h

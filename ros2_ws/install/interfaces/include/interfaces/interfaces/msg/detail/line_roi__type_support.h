@@ -1,0 +1,1 @@
+/home/ubuntu/ros2_ws/build/interfaces/rosidl_generator_c/interfaces/msg/detail/line_roi__type_support.h

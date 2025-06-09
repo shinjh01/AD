@@ -1,0 +1,1 @@
+/home/ubuntu/ros2_ws/build/ros_robot_controller_msgs/rosidl_generator_py/ros_robot_controller_msgs/_ros_robot_controller_msgs_s.ep.rosidl_typesupport_introspection_c.c

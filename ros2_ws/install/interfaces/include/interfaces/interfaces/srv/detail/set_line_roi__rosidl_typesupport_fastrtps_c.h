@@ -1,0 +1,1 @@
+/home/ubuntu/ros2_ws/build/interfaces/rosidl_typesupport_fastrtps_c/interfaces/srv/detail/set_line_roi__rosidl_typesupport_fastrtps_c.h

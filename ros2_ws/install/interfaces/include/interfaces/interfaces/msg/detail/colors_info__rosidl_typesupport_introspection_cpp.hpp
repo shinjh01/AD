@@ -1,0 +1,1 @@
+/home/ubuntu/ros2_ws/build/interfaces/rosidl_typesupport_introspection_cpp/interfaces/msg/detail/colors_info__rosidl_typesupport_introspection_cpp.hpp

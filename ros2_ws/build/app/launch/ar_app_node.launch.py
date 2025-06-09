@@ -1,0 +1,1 @@
+/home/ubuntu/ros2_ws/src/app/launch/ar_app_node.launch.py

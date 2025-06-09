@@ -1,0 +1,1 @@
+/home/ubuntu/ros2_ws/src/slam/launch/rviz_slam.launch.py
