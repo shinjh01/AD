@@ -395,8 +395,14 @@ class SelfDrivingNode(Node):
                 # line following processing
                 result_image, lane_angle, lane_x = self.lane_detect(binary_image, image.copy())  # the coordinate of the line while the robot is in the middle of the lane
                 #self.get_logger().info('\033[1;33m lane_x :  %s , output : %s \033[0m ' % (lane_x, self.pid.output))
+                self.get_logger().info('\033[1;33m lane_x :  %s , turn_right : %s //// %s \033[0m ' % (lane_x, self.turn_right, self.turn_right_distance))
                 if lane_x >= 0 and not self.stop:  
-                    if lane_x > 150:  
+                    if self.turn_right and self.turn_right_distance < 150:
+                        self.turn_right_distance = -1
+                        self.turn_right = False
+                        twist.angular.z =  -0.40  # turning speed
+                        self.get_logger().info("is Right")
+                    elif lane_x > 150:  
                         self.count_turn += 1
                         if self.count_turn > 5 and not self.start_turn:
                             self.start_turn = True
@@ -406,11 +412,6 @@ class SelfDrivingNode(Node):
                             twist.angular.z =  twist.linear.x * math.tan(-0.5061) / 0.145 #-0.45  # turning speed
                         else:
                             twist.angular.z = twist.linear.x * math.tan(-0.5061) / 0.145
-
-                    elif self.turn_right and self.turn_right_distance < 70:
-                        self.turn_right_distance = -1
-                        self.turn_right = False
-                        twist.angular.z =  -0.40  # turning speed
 
                     else:  # use PID algorithm to correct turns on a straight road
                         self.count_turn = 0
@@ -489,10 +490,11 @@ class SelfDrivingNode(Node):
                 elif class_name == 'right':  # obtain the right turning sign
                     self.count_right += 1
                     self.count_right_miss = 0
-                    if self.count_right >= 5:  # If it is detected multiple times, take the right turning sign to true
+                    if self.count_right >= 2:  # If it is detected multiple times, take the right turning sign to true
                         self.turn_right = True
                         self.count_right = 0
-                    
+                        self.get_logger().info("is Right")
+
                     if center[1] > self.turn_right_distance:
                         self.turn_right_distance = center[1]
 
