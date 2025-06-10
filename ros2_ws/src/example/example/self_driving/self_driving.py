@@ -488,10 +488,9 @@ class SelfDrivingNode(Node):
                         self.turn_right = True
                         self.count_right = 0
                         self.get_logger().info(f"right :  {self.turn_right}")
-
                 elif class_name == 'park':  # obtain the center coordinate of the parking sign
                     self.park_x = center[0]
-                    self.park_depth = center[1]#self.depth_image[center[1], center[0]]  # 중심 좌표의 깊이 값
+                    self.park_depth = self.depth_image[center[1], center[0]]  # 중심 좌표의 깊이 값
                     self.last_park_detect_time = time.time()  # 마지막 탐지 시간 갱신
                     self.get_logger().info(f"park_depth {self.park_depth}, park_x : {self.park_x} , center[1] : {center[1]}")
 
