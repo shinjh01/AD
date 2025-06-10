@@ -401,7 +401,7 @@ class SelfDrivingNode(Node):
                         self.turn_right_distance = -1
                         self.turn_right = False
                         twist.angular.z =  -0.40  # turning speed
-                        self.get_logger().info("is Right")
+                        self.get_logger().info("Right start")
                     elif lane_x > 150:  
                         self.count_turn += 1
                         if self.count_turn > 5 and not self.start_turn:
