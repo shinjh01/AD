@@ -363,7 +363,7 @@ class SelfDrivingNode(Node):
 
                 # If the robot detects a stop sign and a crosswalk, it will slow down to ensure stable recognition
 
-                if 200 < self.park_x and 700 > self.park_x and 10 < self.park_depth and 110 > self.park_depth:
+                if 200 < self.park_x and 700 > self.park_x and 10 < self.park_depth and 80 > self.park_depth:
                     self.get_logger().info(f"--- self.park_x : {self.park_x} , park_depth : {self.park_depth}")
                     self.park_x = -1
                     self.park_depth = -1
@@ -388,16 +388,15 @@ class SelfDrivingNode(Node):
                 result_image, lane_angle, lane_x = self.lane_detect(binary_image, image.copy())  # the coordinate of the line while the robot is in the middle of the lane
                 #self.get_logger().info('\033[1;33m lane_x :  %s , output : %s \033[0m ' % (lane_x, self.pid.output))
                 if lane_x >= 0 and not self.stop:  
-                    if lane_x > 150 or self.turn_right:  
+                    if lane_x > 150: #or self.turn_right:  
                         self.count_turn += 1
                         if self.count_turn > 5 and not self.start_turn:
-                            if self.turn_right:
-                                self.get_logger().info(f"move right :  {self.turn_right}")
-
+                            #if self.turn_right:
+                            #    self.get_logger().info(f"move right :  {self.turn_right}")
                             self.start_turn = True
                             self.count_turn = 0
                             self.start_turn_time_stamp = time.time()
-                            self.turn_right = False
+                            #self.turn_right = False
                         if self.machine_type != 'MentorPi_Acker':
                             twist.angular.z =  twist.linear.x * math.tan(-0.5061) / 0.145 # -0.45  # turning speed
                         else:
