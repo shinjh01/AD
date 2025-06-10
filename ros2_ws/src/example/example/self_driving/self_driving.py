@@ -152,7 +152,7 @@ class SelfDrivingNode(Node):
 
         self.start_slow_down = False  # slowing down sign
         self.normal_speed = 0.2  # normal driving speed
-        self.slow_down_speed = 0.2  # slowing down speed
+        self.slow_down_speed = 0.1  # slowing down speed
 
         self.traffic_signs_status = None  # record the state of the traffic lights
         self.red_loss_count = 0
@@ -178,7 +178,7 @@ class SelfDrivingNode(Node):
             camera = 'depth_cam'#self.get_parameter('depth_camera_name').value
             self.create_subscription(Image, '/ascamera/camera_publisher/rgb0/image' , self.image_callback, 1)
             self.create_subscription(ObjectsInfo, '/yolov5_ros2/object_detect', self.get_object_callback, 1)
-            self.create_subscription(Image, '/ascamera/camera_publisher/depth0/image_raw', self.depth_callback, 1)
+            #self.create_subscription(Image, '/ascamera/camera_publisher/depth0/image_raw', self.depth_callback, 1)
             self.mecanum_pub.publish(Twist())
             self.enter = True
         response.success = True
@@ -364,14 +364,13 @@ class SelfDrivingNode(Node):
                 # If the robot detects a stop sign and a crosswalk, it will slow down to ensure stable recognition
                 self.get_logger().info(f"--- self.park_x : {self.park_x} , park_depth : {self.park_depth}")
 
-                if 200 < self.park_x and 700 < self.park_x and 180 < self.park_depth:
+                if 200 < self.park_x and 700 > self.park_x and 70 < self.park_depth and 100 > self.park_depth:
                     self.park_x = -1
                     self.park_depth = -1
                     twist.linear.x = self.slow_down_speed
                     if not self.start_park:  # When the robot is close enough to the crosswalk, it will start parking
                         self.count_park += 1  
-                        if self.count_park >= 10:
-                            time.sleep(2)  
+                        if self.count_park >= 5:
                             self.mecanum_pub.publish(Twist())  
                             self.start_park = True
                             self.stop = True
@@ -411,8 +410,8 @@ class SelfDrivingNode(Node):
                             else:
                                 twist.angular.z = twist.linear.x * math.tan(common.set_range(self.pid.output, -0.1, 0.1)) / 0.145
                         else:
-                            if self.machine_type == 'MentorPi_Acker':
-                                twist.angular.z = 0.15 * math.tan(-0.5061) / 0.145
+                            #if self.machine_type == 'MentorPi_Acker':
+                            twist.angular.z = 0.15 * math.tan(-0.5061) / 0.145
                     self.mecanum_pub.publish(twist)  
                 else:
                     self.pid.clear()
@@ -482,7 +481,7 @@ class SelfDrivingNode(Node):
                         self.count_right = 0
                 elif class_name == 'park':  # obtain the center coordinate of the parking sign
                     self.park_x = center[0]
-                    self.park_depth = self.depth_image[center[1], center[0]]  # 중심 좌표의 깊이 값
+                    self.park_depth = center[1] # self.depth_image[center[1], center[0]]  # 중심 좌표의 깊이 값
                     self.last_park_detect_time = time.time()  # 마지막 탐지 시간 갱신
                     self.get_logger().info(f"park_depth {self.park_depth}, park_x : {self.park_x} , center[1] : {center[1]}")
 
