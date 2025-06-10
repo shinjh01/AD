@@ -187,6 +187,8 @@ class SelfDrivingNode(Node):
 
     def exit_srv_callback(self, request, response):
         self.get_logger().info('\033[1;32m%s\033[0m' % "self driving exit")
+        self.get_logger().info(f"plese start button")
+
         with self.lock:
             self.start = False
             self.enter = False
@@ -430,7 +432,6 @@ class SelfDrivingNode(Node):
                         )
 
             else:
-                self.get_logger().info(f"plese start button")
                 time.sleep(0.01)
 
             self.last_main_while(result_image, time_start)
