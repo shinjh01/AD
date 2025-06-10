@@ -413,6 +413,8 @@ class SelfDrivingNode(Node):
                         self.get_logger().info("Right start")
                         twist.angular.z =  twist.linear.x * math.tan(-0.5061) / 0.145 #-0.45  # turning speed
                     elif lane_x > 150:  
+                        self.get_logger().info("lane_x 150")
+
                         self.count_turn += 1
                         if self.count_turn > 5 and not self.start_turn:
                             self.start_turn = True
@@ -424,6 +426,9 @@ class SelfDrivingNode(Node):
                             twist.angular.z = twist.linear.x * math.tan(-0.5061) / 0.145
 
                     else:  # use PID algorithm to correct turns on a straight road
+                        
+                        self.get_logger().info("else ::: 150")
+
                         self.count_turn = 0
                         if time.time() - self.start_turn_time_stamp > 2 and self.start_turn:
                             self.start_turn = False
@@ -458,7 +463,7 @@ class SelfDrivingNode(Node):
                         )
 
             else:
-                self.get_logger().info(f"plese start button")
+                #self.get_logger().info(f"plese start button")
                 time.sleep(0.01)
             
             bgr_image = cv2.cvtColor(result_image, cv2.COLOR_RGB2BGR)
