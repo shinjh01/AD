@@ -157,6 +157,7 @@ class SelfDrivingNode(Node):
         self.count_right = 0
         self.count_right_miss = 0
         self.turn_right = False  # right turning sign
+        self.turn_right_distance = -1  # right turning sign
 
         self.last_park_detect = False
         self.count_park = 0  
@@ -170,8 +171,8 @@ class SelfDrivingNode(Node):
         # 속도를 조절하는 인자 부분 
         # slow_down_speed는 어떤 대상을 인지할 때 자동 조정 0.5, 0.3 지정
         self.start_slow_down = False  # slowing down sign
-        self.normal_speed = 0.1  # normal driving speed
-        self.slow_down_speed = 0.1  # slowing down speed
+        self.normal_speed = 0.2  # normal driving speed
+        self.slow_down_speed = 0.2  # slowing down speed
 
         self.traffic_signs_status = None  # record the state of the traffic lights
         self.red_loss_count = 0
@@ -405,6 +406,12 @@ class SelfDrivingNode(Node):
                             twist.angular.z =  twist.linear.x * math.tan(-0.5061) / 0.145 #-0.45  # turning speed
                         else:
                             twist.angular.z = twist.linear.x * math.tan(-0.5061) / 0.145
+
+                    elif self.turn_right and self.turn_right_distance < 70:
+                        self.turn_right_distance = -1
+                        self.turn_right = False
+                        twist.angular.z =  -0.40  # turning speed
+
                     else:  # use PID algorithm to correct turns on a straight road
                         self.count_turn = 0
                         if time.time() - self.start_turn_time_stamp > 2 and self.start_turn:
@@ -485,6 +492,10 @@ class SelfDrivingNode(Node):
                     if self.count_right >= 5:  # If it is detected multiple times, take the right turning sign to true
                         self.turn_right = True
                         self.count_right = 0
+                    
+                    if center[1] > turn_right_distance:
+                        turn_right_distance = center[1]
+
                 elif class_name == 'park':  # obtain the center coordinate of the parking sign
                     self.park_x = center[0]
                 elif class_name == 'red' or class_name == 'green':  # obtain the status of the traffic light
