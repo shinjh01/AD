@@ -452,10 +452,6 @@ class SelfDrivingNode(Node):
             #rqt 확인 용 퍼블리쉬
             self.result_publisher.publish(self.bridge.cv2_to_imgmsg(bgr_image, "bgr8"))
 
-            time_d = 0.03 - (time.time() - time_start)
-            if time_d > 0:
-                time.sleep(time_d)
-
             
             #한 루프가 0.03초(약 33FPS)보다 빨리 끝났으면 남은 시간만큼 대기합니다.
             latency = time.time() - time_start
