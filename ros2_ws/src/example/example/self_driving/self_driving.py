@@ -8,6 +8,10 @@ import cv2
 import math
 import time
 import queue
+# 종료시의 컨트롤
+import signal
+import sys
+import atexit
 import rclpy
 import threading
 import numpy as np
@@ -43,7 +47,9 @@ class SelfDrivingNode(Node):
         self.bridge = CvBridge()
         self.lock = threading.RLock()
         self.colors = common.Colors()
-        # signal.signal(signal.SIGINT, self.shutdown)
+        # 프로그램 종료시의 시그널 수신
+        signal.signal(signal.SIGINT, self.shutdown)
+        signal.signal(signal.STGTERM, self.shutdown)
         self.machine_type = os.environ.get('MACHINE_TYPE')
         self.lane_detect = lane_detect.LaneDetector("yellow")
 
@@ -77,7 +83,6 @@ class SelfDrivingNode(Node):
         self.get_logger().info(f"Button received: id={msg.id}, state={msg.state}")
         if msg.id == 1 and msg.state == 1:  # Button 1 short press
             self.get_logger().info("Button 1 pressed, starting self-driving")
-            self.rgb_color_publish(0)
             #self.is_running = True  # Start the self-driving process
             self.enter_srv_callback(Trigger.Request(), Trigger.Response())
             self.start = True
@@ -218,12 +223,11 @@ class SelfDrivingNode(Node):
         
         response.success = True
         response.message = "exit"
-        self.rgb_color_publish(2)
         return response
 
     def set_running_srv_callback(self, request, response):
         self.get_logger().info('\033[1;32m%s\033[0m' % "set_running")
-        self.rgb_clor_publish(1)
+        self.rgb_color_publish(1)
         with self.lock:
             self.start = request.data
             if not self.start:
@@ -233,8 +237,15 @@ class SelfDrivingNode(Node):
         return response
 
     def shutdown(self, signum, frame):  # press 'ctrl+c' to close the program
+        self.get_logger().info("Caught shutdown siganl, turn off RGB")
         self.rgb_color_publish(2)
         self.is_running = False
+        rclpy.shutdown()
+        sys.exit(0)
+    
+    def cleanup_rgb(self):
+        self.get_logger().info("Cleanup RGB before exit")
+        self.rgb_color_publish(2)
 
     def image_callback(self, ros_image):  # callback target checking
         cv_image = self.bridge.imgmsg_to_cv2(ros_image, "rgb8")
@@ -293,6 +304,7 @@ class SelfDrivingNode(Node):
 
     def main(self):
         self.get_logger().info('\033[1;32m -0- %s\033[0m' % self.machine_type)
+        self.rgb_color_publish(0)
 
         latency = 0
         while self.is_running:
