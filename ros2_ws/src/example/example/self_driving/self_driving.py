@@ -351,10 +351,8 @@ class SelfDrivingNode(Node):
             self.result_publisher.publish(self.bridge.cv2_to_imgmsg(bgr_image, "bgr8"))
 
             if(self.start):
-                self.led_publisher(LedState(1,1,0,3))
                 self.rgb_publisher(RGBState(1,0,255,0))
             elif(self.stop):
-                self.led_publisher(LedState(1,1,0,3))
                 self.rgb_publisher(RGBState(1,255,0,0))
            
             time_d = 0.03 - (time.time() - time_start)
