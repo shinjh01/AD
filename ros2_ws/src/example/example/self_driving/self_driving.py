@@ -31,6 +31,7 @@ class SelfDrivingNode(Node):
     def __init__(self, name):
         rclpy.init()
         super().__init__(name, allow_undeclared_parameters=True, automatically_declare_parameters_from_overrides=True)
+        self.last_park_detect_time = 0  # 마지막으로 주차 표지판을 탐지한 시간        
         self.name = name
         self.is_running = True
         self.pid = pid.PID(0.4, 0.0, 0.05)
@@ -150,8 +151,8 @@ class SelfDrivingNode(Node):
         self.crosswalk_length = 0.1 + 0.3  # the length of zebra crossing and the robot
 
         self.start_slow_down = False  # slowing down sign
-        self.normal_speed = 0.1  # normal driving speed
-        self.slow_down_speed = 0.1  # slowing down speed
+        self.normal_speed = 0.2  # normal driving speed
+        self.slow_down_speed = 0.2  # slowing down speed
 
         self.traffic_signs_status = None  # record the state of the traffic lights
         self.red_loss_count = 0
@@ -239,6 +240,8 @@ class SelfDrivingNode(Node):
             twist.linear.y = -0.2
             self.mecanum_pub.publish(twist)
             time.sleep(0.38/0.2)
+            self.reset_motor_position()
+            self.exit_srv_callback(Trigger.Request(), Trigger.Response()) 
         elif self.machine_type == 'MentorPi_Acker':
             twist = Twist()
             twist.linear.x = 0.15
@@ -299,20 +302,6 @@ class SelfDrivingNode(Node):
 
                 twist = Twist()
 
-                ########### added js 주차표지판은 제일 먼저 처리.
-                if self.start_park:
-                    self.get_logger().info(f"--- 1 park : {self.crosswalk_distance}")
-
-                    if 100 > self.crosswalk_distance:
-                            self.mecanum_pub.publish(Twist())  
-                            #self.start_park = True
-                            self.stop = True
-                            self.get_logger().info(f"--- start park : {self.count_park}")
-                            threading.Thread(target=self.park_action).start()
-                    else:
-                        self.start_slow_down = True
-
-
                 # if detecting the zebra crossing, start to slow down
                 #self.get_logger().info('\033[1;33m -- %s\033[0m  / latency : %s ' % (self.crosswalk_distance , latency))
                 #횡단 보도 감지 및 감속 
@@ -351,19 +340,23 @@ class SelfDrivingNode(Node):
 
                 #주차 표지판 인식.
                 # If the robot detects a stop sign and a crosswalk, it will slow down to ensure stable recognition
-                if 0 < self.park_x and 300 > self.park_depth and 2100 < self.park_depth:
+                if 0 < self.park_x and 300 < self.park_depth and 2100 > self.park_depth:
+                    current_time = time.time()
+                    if current_time - self.last_park_detect_time > 1:  # 1초 이상 탐지되지 않으면 초기화
+                        self.count_park = 0
+
                     self.get_logger().info(f"--- self.park_x : {self.park_x} , park_depth : {self.park_depth}, count_park : {self.count_park}")
-                    twist.linear.x = self.slow_down_speed
                     self.count_park += 1  
                     self.park_x = -1 # park 표지판 초기화
                     self.park_depth = -1
-                    if self.count_park >= 3:  
-                            #self.mecanum_pub.publish(Twist())  
-                        self.start_park = True
-                            #self.stop = True
-                            #self.get_logger().info(f"--- start park : {self.count_park}")
-                else:            #threading.Thread(target=self.park_action).start()
-                    self.count_park = 0
+                    if self.count_park >= 5: 
+                        twist.linear.x = self.slow_down_speed
+                        travel_time = self.park_depth / twist.linear.x  # 이동 시간 계산 (거리 / 속도)
+                        self.start_park = True 
+                        self.get_logger().info(f"Moving forward for {travel_time:.2f} seconds to cover {self.park_depth:.2f} meters.")
+                        time.sleep(travel_time)  # 이동 시간만큼 대기
+                        self.mecanum_pub.publish(Twist())  # 정지
+                        threading.Thread(target=self.park_action).start()
 
                 # 차선 추적 및 PID 제어
                 # 차선 중심 좌표(lane_x)가 감지되고 정지 상태가 아니면
@@ -470,6 +463,7 @@ class SelfDrivingNode(Node):
                 elif class_name == 'park':  # obtain the center coordinate of the parking sign
                     self.park_x = center[0]
                     self.park_depth = self.depth_image[center[1], center[0]]  # 중심 좌표의 깊이 값
+                    self.last_park_detect_time = time.time()  # 마지막 탐지 시간 갱신
                     self.get_logger().info(f"park_depth {self.park_depth}, park_x : {self.park_x} , center[1] : {center[1]}")
 
                 elif class_name == 'red' or class_name == 'green':  # obtain the status of the traffic light
