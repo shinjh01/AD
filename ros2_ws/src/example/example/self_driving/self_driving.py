@@ -197,6 +197,12 @@ class SelfDrivingNode(Node):
                 self.get_logger().info('\033[1;32m%s\033[0m' % str(e))
             self.mecanum_pub.publish(Twist())
         self.param_init()
+        rgb_msg = RGBStates()
+        rgb_msg.state = [
+            RGBState(index=1, red=0, green=0, blue=0)
+        ]
+        self.rgb_publisher.publish(rgb_msg) 
+        
         response.success = True
         response.message = "exit"
         return response
