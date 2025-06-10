@@ -351,11 +351,12 @@ class SelfDrivingNode(Node):
 
                 #주차 표지판 인식.
                 # If the robot detects a stop sign and a crosswalk, it will slow down to ensure stable recognition
-                if 0 < self.park_x and 300 > self.park_depth and 1900 < self.park_depth:
+                if 0 < self.park_x and 300 > self.park_depth and 2100 < self.park_depth:
                     self.get_logger().info(f"--- self.park_x : {self.park_x} , park_depth : {self.park_depth}, count_park : {self.count_park}")
                     twist.linear.x = self.slow_down_speed
                     self.count_park += 1  
                     self.park_x = -1 # park 표지판 초기화
+                    self.park_depth = -1
                     if self.count_park >= 3:  
                             #self.mecanum_pub.publish(Twist())  
                         self.start_park = True
