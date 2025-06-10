@@ -275,6 +275,7 @@ class SelfDrivingNode(Node):
             time.sleep(1.5)
         self.mecanum_pub.publish(Twist())
 
+
     def main(self):
         self.get_logger().info('\033[1;32m -0- %s\033[0m' % self.machine_type)
 
@@ -297,6 +298,18 @@ class SelfDrivingNode(Node):
                 binary_image = self.lane_detect.get_binary(image)
 
                 twist = Twist()
+
+                ########### added js 주차표지판은 제일 먼저 처리.
+                if self.start_park:
+                    if 100 > self.crosswalk_distance:
+                            self.mecanum_pub.publish(Twist())  
+                            #self.start_park = True
+                            self.stop = True
+                            self.get_logger().info(f"--- start park : {self.count_park}")
+                            threading.Thread(target=self.park_action).start()
+                    else:
+                        self.start_slow_down = True
+
 
                 # if detecting the zebra crossing, start to slow down
                 #self.get_logger().info('\033[1;33m -- %s\033[0m  / latency : %s ' % (self.crosswalk_distance , latency))
@@ -336,7 +349,7 @@ class SelfDrivingNode(Node):
 
                 #주차 표지판 인식.
                 # If the robot detects a stop sign and a crosswalk, it will slow down to ensure stable recognition
-                if 0 < self.park_x and 500 > self.park_depth:
+                if 0 < self.park_x and 300 > self.park_depth and 900 < self.park_depth:
                     self.get_logger().info(f"--- self.park_x : {self.park_x} , park_depth : {self.park_depth}, count_park : {self.count_park}")
 
                     twist.linear.x = self.slow_down_speed
@@ -344,11 +357,11 @@ class SelfDrivingNode(Node):
                         self.count_park += 1  
                         self.park_x = -1 # park 표지판 초기화
                         if self.count_park >= 5:  
-                            self.mecanum_pub.publish(Twist())  
+                            #self.mecanum_pub.publish(Twist())  
                             self.start_park = True
-                            self.stop = True
-                            self.get_logger().info(f"--- start park : {self.count_park}")
-                            threading.Thread(target=self.park_action).start()
+                            #self.stop = True
+                            #self.get_logger().info(f"--- start park : {self.count_park}")
+                            #threading.Thread(target=self.park_action).start()
                     else:
                         self.count_park = 0  
                 
@@ -409,25 +422,28 @@ class SelfDrivingNode(Node):
             else:
                 self.get_logger().info(f"plese start button")
                 time.sleep(0.01)
-            
-            bgr_image = cv2.cvtColor(result_image, cv2.COLOR_RGB2BGR)
-            # self.display가 True일 때만 FPS 표시 등 디스플레이 관련 처리를 합니다
-            if self.display:
-                self.fps.update()
-                #초당 FPS계산 및 오버레이.
-                bgr_image = self.fps.show_fps(bgr_image)
-            #rqt 확인 용 퍼블리쉬
-            self.result_publisher.publish(self.bridge.cv2_to_imgmsg(bgr_image, "bgr8"))
 
-            #한 루프가 0.03초(약 33FPS)보다 빨리 끝났으면 남은 시간만큼 대기합니다.
-            latency = time.time() - time_start
-            time_d = 0.03 - latency
-            #일정한 주기로 루프가 돌도록 보장합니다.
-            if time_d > 0:
-                time.sleep(time_d)
+            self.last_main_while(result_image, time_start)
 
         self.mecanum_pub.publish(Twist())
         rclpy.shutdown()
+
+    def last_main_while(self, result_image, time_start):
+        bgr_image = cv2.cvtColor(result_image, cv2.COLOR_RGB2BGR)
+        # self.display가 True일 때만 FPS 표시 등 디스플레이 관련 처리를 합니다
+        if self.display:
+            self.fps.update()
+            #초당 FPS계산 및 오버레이.
+            bgr_image = self.fps.show_fps(bgr_image)
+        #rqt 확인 용 퍼블리쉬
+        self.result_publisher.publish(self.bridge.cv2_to_imgmsg(bgr_image, "bgr8"))
+
+        #한 루프가 0.03초(약 33FPS)보다 빨리 끝났으면 남은 시간만큼 대기합니다.
+        latency = time.time() - time_start
+        time_d = 0.03 - latency
+        #일정한 주기로 루프가 돌도록 보장합니다.
+        if time_d > 0:
+            time.sleep(time_d)
 
 
     # Obtain the target detection result
