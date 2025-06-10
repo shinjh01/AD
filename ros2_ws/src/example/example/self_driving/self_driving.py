@@ -37,6 +37,9 @@ class SelfDrivingNode(Node):
         self.pid = pid.PID(0.4, 0.0, 0.05)
         self.param_init()
 
+        self.park_detection_history = []  # 최근 탐지 기록
+        self.park_validation_count = 0    # 연속 탐지 횟수
+
         self.fps = fps.FPS()  
         self.image_queue = queue.Queue(maxsize=2)
         self.depth_image = None
@@ -178,7 +181,7 @@ class SelfDrivingNode(Node):
             camera = 'depth_cam'#self.get_parameter('depth_camera_name').value
             self.create_subscription(Image, '/ascamera/camera_publisher/rgb0/image' , self.image_callback, 1)
             self.create_subscription(ObjectsInfo, '/yolov5_ros2/object_detect', self.get_object_callback, 1)
-            #self.create_subscription(Image, '/ascamera/camera_publisher/depth0/image_raw', self.depth_callback, 1)
+            self.create_subscription(Image, '/ascamera/camera_publisher/depth0/image_raw', self.depth_callback, 1)
             self.mecanum_pub.publish(Twist())
             self.enter = True
         response.success = True
@@ -282,6 +285,43 @@ class SelfDrivingNode(Node):
         self.mecanum_pub.publish(Twist())
 
 
+    def is_valid_park_detection(self, park_x, park_depth, image_width):
+        """
+        주차 표지판 탐지가 유효한지 확인
+        """
+        if park_x < 0 or park_depth < 0:
+            return False
+        
+        # 이미지 중앙 영역에 있는지 확인 (너비의 30% ~ 70%)
+        x_ratio = park_x / image_width
+        if not (0.3 < x_ratio < 0.7):
+            return False
+        
+        # 밀리미터 단위라면 500mm(0.5m) ~ 2500mm(2.5m) 범위
+        if park_depth < 500 or park_depth > 2500:  # mm 단위 기준
+            return False
+        
+        return True
+
+    def update_park_detection(self, park_x, park_depth, image_width):
+        """
+        주차 표지판 탐지 상태 업데이트
+        """
+        current_time = time.time()
+        
+        if self.is_valid_park_detection(park_x, park_depth, image_width):
+            self.park_validation_count += 1
+            self.last_park_detect_time = current_time
+            return True
+        else:
+            # 1초 이상 유효한 탐지가 없으면 초기화
+            if current_time - self.last_park_detect_time > 1.0:
+                self.park_validation_count = 0
+                self.park_x = -1
+                self.park_depth = -1
+            return False
+
+
     def main(self):
         self.get_logger().info('\033[1;32m -0- %s\033[0m' % self.machine_type)
 
@@ -363,20 +403,35 @@ class SelfDrivingNode(Node):
 
                 # If the robot detects a stop sign and a crosswalk, it will slow down to ensure stable recognition
 
-                if 200 < self.park_x and 700 > self.park_x and 10 < self.park_depth and 80 > self.park_depth:
-                    self.get_logger().info(f"--- self.park_x : {self.park_x} , park_depth : {self.park_depth}")
-                    self.park_x = -1
-                    self.park_depth = -1
-                    twist.linear.x = self.slow_down_speed
-                    if not self.start_park:  # When the robot is close enough to the crosswalk, it will start parking
-                        self.count_park += 1  
-                        if self.count_park >= 5:
-                            self.mecanum_pub.publish(Twist())  
+                # if 200 < self.park_x and 700 > self.park_x and 10 < self.park_depth and 80 > self.park_depth:
+                #     self.get_logger().info(f"--- self.park_x : {self.park_x} , park_depth : {self.park_depth}")
+                #     #self.park_x = -1
+                #     #self.park_depth = -1
+                #     twist.linear.x = self.slow_down_speed
+                #     if not self.start_park:  # When the robot is close enough to the crosswalk, it will start parking
+                #         self.count_park += 1  
+                #         if self.count_park >= 10:
+                #             self.mecanum_pub.publish(Twist())  
+                #             self.start_park = True
+                #             self.stop = True
+                #             threading.Thread(target=self.park_action).start()
+                #     else:
+                #         self.count_park = 0  
+
+                # 주차 표지판 처리
+                if self.update_park_detection(self.park_x, self.park_depth, w):
+                    self.get_logger().info(f"Park sign: x={self.park_x}, depth={self.park_depth:.2f}m, count={self.park_validation_count}")
+                    
+                    # 충분히 검증된 경우에만 주차 시작
+                    if self.park_validation_count >= 8:  # 8번 연속 유효한 탐지
+                        twist.linear.x = self.slow_down_speed
+                        
+                        if not self.start_park:
+                            self.mecanum_pub.publish(Twist())
                             self.start_park = True
                             self.stop = True
+                            self.get_logger().info(f"Starting parking sequence - depth: {self.park_depth:.2f}m")
                             threading.Thread(target=self.park_action).start()
-                    else:
-                        self.count_park = 0  
 
                 # 차선 추적 및 PID 제어
                 # 차선 중심 좌표(lane_x)가 감지되고 정지 상태가 아니면
@@ -486,7 +541,7 @@ class SelfDrivingNode(Node):
 
                 elif class_name == 'park':  # obtain the center coordinate of the parking sign
                     self.park_x = center[0]
-                    self.park_depth = center[1] # self.depth_image[center[1], center[0]]  # 중심 좌표의 깊이 값
+                    self.park_depth = self.depth_image[center[1], center[0]]  # 중심 좌표의 깊이 값
                     self.last_park_detect_time = time.time()  # 마지막 탐지 시간 갱신
                     self.get_logger().info(f"park_depth {self.park_depth}, park_x : {self.park_x} , center[1] : {center[1]}")
 
