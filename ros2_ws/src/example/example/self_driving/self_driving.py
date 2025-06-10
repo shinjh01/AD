@@ -368,7 +368,7 @@ class SelfDrivingNode(Node):
                 #self.get_logger().info(f"--- self.park_x : {self.park_x / w} , park_depth : {self.park_depth}")
 
                 if 200 < self.park_x and 700 > self.park_x and 10 < self.park_depth and 2000 > self.park_depth:
-                    self.get_logger().info(f"--- Start  self.park_x : {self.park_x} , park_depth : {self.park_depth}")
+                   # self.get_logger().info(f"--- Start  self.park_x : {self.park_x} , park_depth : {self.park_depth}")
                     #self.park_x = -1
                     #self.park_depth = -1
                     # twist.linear.x = self.slow_down_speed
