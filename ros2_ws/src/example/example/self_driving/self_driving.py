@@ -362,14 +362,16 @@ class SelfDrivingNode(Node):
                 #         threading.Thread(target=self.park_action).start()
 
                 # If the robot detects a stop sign and a crosswalk, it will slow down to ensure stable recognition
-                self.get_logger().info(f"--- self.park_x : {self.park_x} , crosswalk_distance : {self.crosswalk_distance}")
+                self.get_logger().info(f"--- self.park_x : {self.park_x} , park_depth : {self.park_depth}")
 
-                if 0 < self.park_x and 180 < self.crosswalk_distance:
+                if 200 < self.park_x and 700 < self.park_x and 180 < self.park_depth:
                     self.park_x = -1
+                    self.park_depth = -1
                     twist.linear.x = self.slow_down_speed
                     if not self.start_park:  # When the robot is close enough to the crosswalk, it will start parking
                         self.count_park += 1  
-                        if self.count_park >= 15:  
+                        if self.count_park >= 10:
+                            time.sleep(2)  
                             self.mecanum_pub.publish(Twist())  
                             self.start_park = True
                             self.stop = True
