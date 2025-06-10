@@ -340,7 +340,7 @@ class SelfDrivingNode(Node):
                     self.get_logger().info(f"--- self.park_x : {self.park_x} , park_depth : {self.park_depth}, count_park : {self.count_park}")
 
                     twist.linear.x = self.slow_down_speed
-                    if not self.start_park and 300 > self.park_depth:  # When the robot is close enough to the crosswalk, it will start parking
+                    if not self.start_park :  # When the robot is close enough to the crosswalk, it will start parking
                         self.count_park += 1  
                         self.park_x = -1 # park 표지판 초기화
                         if self.count_park >= 5:  
@@ -392,7 +392,7 @@ class SelfDrivingNode(Node):
 
                 #rqt로 볼때 화면에 인식 박스를 그려줌. 기본 실행시 오히려
                 #성능상 이점이 없으므로 False처리. 추후 argument로 받도록 변경
-                if False and self.objects_info:
+                if True and self.objects_info:
                     for i in self.objects_info:
                         box = i.box
                         class_name = i.class_name
