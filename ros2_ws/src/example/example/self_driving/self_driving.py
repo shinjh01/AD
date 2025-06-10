@@ -25,7 +25,7 @@ from sdk.common import colors, plot_one_box
 from example.self_driving import lane_detect
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
-from ros_robot_controller_msgs.msg import BuzzerState, SetPWMServoState, PWMServoState
+from ros_robot_controller_msgs.msg import BuzzerState, SetPWMServoState, PWMServoState, LedState,RGBState
 
 class SelfDrivingNode(Node):
     def __init__(self, name):
@@ -50,6 +50,8 @@ class SelfDrivingNode(Node):
         self.mecanum_pub = self.create_publisher(Twist, '/controller/cmd_vel', 1)
         self.servo_state_pub = self.create_publisher(SetPWMServoState, 'ros_robot_controller/pwm_servo/set_state', 1)
         self.result_publisher = self.create_publisher(Image, '~/image_result', 1)
+        self.led_publisher = self.create_publisher(LedState, 'ros_robot_controller/led',1)
+        self.rgb_publisher = self.create_publisher(RGBState, 'ros_robot_controller/rgb',1)
 
         self.create_service(Trigger, '~/enter', self.enter_srv_callback) # enter the game
         self.create_service(Trigger, '~/exit', self.exit_srv_callback) # exit the game
@@ -348,10 +350,18 @@ class SelfDrivingNode(Node):
             
             self.result_publisher.publish(self.bridge.cv2_to_imgmsg(bgr_image, "bgr8"))
 
+            if(self.start):
+                self.led_publisher(LedState(1,1,0,3))
+                self.rgb_publisher(RGBState(1,0,255,0))
+            elif(self.stop):
+                self.led_publisher(LedState(1,1,0,3))
+                self.rgb_publisher(RGBState(1,255,0,0))
            
             time_d = 0.03 - (time.time() - time_start)
             if time_d > 0:
                 time.sleep(time_d)
+
+            
         self.mecanum_pub.publish(Twist())
         rclpy.shutdown()
 
