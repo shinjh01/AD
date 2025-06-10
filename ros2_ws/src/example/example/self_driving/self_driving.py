@@ -398,17 +398,21 @@ class SelfDrivingNode(Node):
                 #self.get_logger().info('\033[1;33m lane_x :  %s , output : %s \033[0m ' % (lane_x, self.pid.output))
                 #self.get_logger().info('\033[1;33m lane_x :  %s , turn_right : %s //// %s \033[0m ' % (lane_x, self.turn_right, self.turn_right_distance))
                 
-                if time.time() - self.start_turn_time_stamp > 2 and self.turn_right:
-                    self.turn_right_distance = -1
-                    self.turn_right = False
-                    self.start_turn = True
-                    self.get_logger().info("Right start End")
-                elif self.turn_right:
-                    self.turn_right_time_stamp = time.time()
-                    self.get_logger().info("Right start")
-                    twist.angular.z =  twist.linear.x * math.tan(-0.5061) / 0.145 #-0.45  # turning speed
-                elif lane_x >= 0 and not self.stop:  
-                    if lane_x > 150:  
+                if not self.stop:  
+                    #if time.time() - self.start_turn_time_stamp > 2 and self.turn_right:
+                    #    self.turn_right_distance = -1
+                    #    self.turn_right = False
+                    #    self.start_turn = True
+                    #    self.get_logger().info("Right start End")
+                    if self.turn_right and self.turn_right_distance < 200:
+                    #    self.turn_right_time_stamp = time.time()
+                        self.turn_right_distance = -1
+                        self.turn_right = False
+                        self.start_turn = True
+                        self.start_turn_time_stamp = time.time()
+                        self.get_logger().info("Right start")
+                        twist.angular.z =  twist.linear.x * math.tan(-0.5061) / 0.145 #-0.45  # turning speed
+                    elif lane_x > 150:  
                         self.count_turn += 1
                         if self.count_turn > 5 and not self.start_turn:
                             self.start_turn = True
