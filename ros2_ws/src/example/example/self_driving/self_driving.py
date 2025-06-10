@@ -82,9 +82,9 @@ class SelfDrivingNode(Node):
             self.start = True
         elif msg.id == 2 and msg.state == 1:  # Button 1 short press
             self.get_logger().info("Button 2 pressed, stop self-driving")
+            self.reset_motor_position()
             #self.is_running = False  # Start the self-driving process
             self.exit_srv_callback(Trigger.Request(), Trigger.Response())  # Call the reset motor position function
-            self.reset_motor_position()
 
     def reset_motor_position(self):
         """
@@ -351,22 +351,19 @@ class SelfDrivingNode(Node):
 
                 #주차 표지판 인식.
                 # If the robot detects a stop sign and a crosswalk, it will slow down to ensure stable recognition
-                if 0 < self.park_x and 300 > self.park_depth and 900 < self.park_depth:
+                if 0 < self.park_x and 300 > self.park_depth and 1900 < self.park_depth:
                     self.get_logger().info(f"--- self.park_x : {self.park_x} , park_depth : {self.park_depth}, count_park : {self.count_park}")
-
                     twist.linear.x = self.slow_down_speed
-                    if not self.start_park :  # When the robot is close enough to the crosswalk, it will start parking
-                        self.count_park += 1  
-                        self.park_x = -1 # park 표지판 초기화
-                        if self.count_park >= 5:  
+                    self.count_park += 1  
+                    self.park_x = -1 # park 표지판 초기화
+                    if self.count_park >= 3:  
                             #self.mecanum_pub.publish(Twist())  
-                            self.start_park = True
+                        self.start_park = True
                             #self.stop = True
                             #self.get_logger().info(f"--- start park : {self.count_park}")
-                            #threading.Thread(target=self.park_action).start()
-                    else:
-                        self.count_park = 0  
-                
+                else:            #threading.Thread(target=self.park_action).start()
+                    self.count_park = 0
+
                 # 차선 추적 및 PID 제어
                 # 차선 중심 좌표(lane_x)가 감지되고 정지 상태가 아니면
                 # 차선이 오른쪽으로 치우쳐 있으면(150 이상) 우회전 동작을 시작.
@@ -471,9 +468,9 @@ class SelfDrivingNode(Node):
                         self.count_right = 0
                 elif class_name == 'park':  # obtain the center coordinate of the parking sign
                     self.park_x = center[0]
-                    if self.depth_image is not None:
-                        self.park_depth = self.depth_image[center[1], center[0]]  # 중심 좌표의 깊이 값
-                        self.get_logger().info(f"Depth value at parking sign: {self.park_depth} ")
+                    self.park_depth = self.depth_image[center[1], center[0]]  # 중심 좌표의 깊이 값
+                    self.get_logger().info(f"park_depth {self.park_depth}, park_x : {self.park_x} , center[1] : {center[1]}")
+
                 elif class_name == 'red' or class_name == 'green':  # obtain the status of the traffic light
                     self.traffic_signs_status = i
                
