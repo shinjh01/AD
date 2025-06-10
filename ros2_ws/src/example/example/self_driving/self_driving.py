@@ -181,7 +181,7 @@ class SelfDrivingNode(Node):
             camera = 'depth_cam'#self.get_parameter('depth_camera_name').value
             self.create_subscription(Image, '/ascamera/camera_publisher/rgb0/image' , self.image_callback, 1)
             self.create_subscription(ObjectsInfo, '/yolov5_ros2/object_detect', self.get_object_callback, 1)
-            #self.create_subscription(Image, '/ascamera/camera_publisher/depth0/image_raw', self.depth_callback, 1)
+            self.create_subscription(Image, '/ascamera/camera_publisher/depth0/image_raw', self.depth_callback, 1)
             self.mecanum_pub.publish(Twist())
             self.enter = True
         response.success = True
@@ -302,6 +302,7 @@ class SelfDrivingNode(Node):
             result_image = image.copy()
             if self.start:
                 h, w = image.shape[:2]
+                self.get_logger().info(f"--- width : {w} , height : {h}")
 
                 # obtain the binary image of the lane
                 binary_image = self.lane_detect.get_binary(image)
@@ -365,22 +366,22 @@ class SelfDrivingNode(Node):
                 #         threading.Thread(target=self.park_action).start()
 
                 # If the robot detects a stop sign and a crosswalk, it will slow down to ensure stable recognition
-                self.get_logger().info(f"--- self.park_x : {self.park_x / w} , park_depth : {self.park_depth / h}")
+                #self.get_logger().info(f"--- self.park_x : {self.park_x / w} , park_depth : {self.park_depth}")
 
-                if 200 < self.park_x and 700 > self.park_x and 10 < self.park_depth and 80 > self.park_depth:
-                    self.get_logger().info(f"--- 222 self.park_x : {self.park_x} , park_depth : {self.park_depth}")
+                if 200 < self.park_x and 700 > self.park_x and 10 < self.park_depth and 2000 > self.park_depth:
+                    self.get_logger().info(f"--- Start  self.park_x : {self.park_x} , park_depth : {self.park_depth}")
                     #self.park_x = -1
                     #self.park_depth = -1
-                    twist.linear.x = self.slow_down_speed
-                    if not self.start_park:  # When the robot is close enough to the crosswalk, it will start parking
-                        self.count_park += 1  
-                        if self.count_park >= 10:
-                            self.mecanum_pub.publish(Twist())  
-                            self.start_park = True
-                            self.stop = True
-                            threading.Thread(target=self.park_action).start()
-                    else:
-                        self.count_park = 0  
+                    # twist.linear.x = self.slow_down_speed
+                    # if not self.start_park:  # When the robot is close enough to the crosswalk, it will start parking
+                    #     self.count_park += 1  
+                    #     if self.count_park >= 10:
+                    #         self.mecanum_pub.publish(Twist())  
+                    #         self.start_park = True
+                    #         self.stop = True
+                    #         threading.Thread(target=self.park_action).start()
+                    # else:
+                    #     self.count_park = 0  
 
 
                 # 차선 추적 및 PID 제어
@@ -491,7 +492,7 @@ class SelfDrivingNode(Node):
 
                 elif class_name == 'park':  # obtain the center coordinate of the parking sign
                     self.park_x = center[0]
-                    self.park_depth = center[1]#self.depth_image[center[1], center[0]]  # 중심 좌표의 깊이 값
+                    self.park_depth = self.depth_image[center[1], center[0]]  # 중심 좌표의 깊이 값
                     self.last_park_detect_time = time.time()  # 마지막 탐지 시간 갱신
                     self.get_logger().info(f"park_depth {self.park_depth}, park_x : {self.park_x} , center[1] : {center[1]}")
 
