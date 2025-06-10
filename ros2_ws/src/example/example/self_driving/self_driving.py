@@ -38,6 +38,7 @@ class SelfDrivingNode(Node):
 
         self.fps = fps.FPS()  
         self.image_queue = queue.Queue(maxsize=2)
+        self.depth_image = None
         self.classes = ['go', 'right', 'park', 'red', 'green', 'crosswalk']
         self.display = True
         self.bridge = CvBridge()
@@ -129,6 +130,7 @@ class SelfDrivingNode(Node):
         self.detect_turn_right = False
         self.detect_far_lane = False
         self.park_x = -1  # obtain the x-pixel coordinate of a parking sign
+        self.park_depth = -1  # obtain the x-pixel coordinate of a parking sign
 
         self.start_turn_time_stamp = 0
         self.count_turn = 0
@@ -175,6 +177,7 @@ class SelfDrivingNode(Node):
             camera = 'depth_cam'#self.get_parameter('depth_camera_name').value
             self.create_subscription(Image, '/ascamera/camera_publisher/rgb0/image' , self.image_callback, 1)
             self.create_subscription(ObjectsInfo, '/yolov5_ros2/object_detect', self.get_object_callback, 1)
+            self.create_subscription(Image, '/ascamera/camera_publisher/depth0/image_raw', self.depth_callback, 1)
             self.mecanum_pub.publish(Twist())
             self.enter = True
         response.success = True
@@ -220,7 +223,13 @@ class SelfDrivingNode(Node):
             self.image_queue.get()
         # put the image into the queue
         self.image_queue.put(rgb_image)
-    
+
+    def depth_callback(self, msg):
+        try:
+            self.depth_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough")
+        except Exception as e:
+            self.get_logger().error(f"Failed to process depth image: {e}")
+        
     # parking processing
     def park_action(self):
         self.get_logger().info(f"--- park_action:machine_type : {self.machine_type}")
@@ -361,7 +370,7 @@ class SelfDrivingNode(Node):
                             self.count_turn = 0
                             self.start_turn_time_stamp = time.time()
                         if self.machine_type != 'MentorPi_Acker':
-                            twist.angular.z =  -0.45  # turning speed
+                            twist.angular.z =  twist.linear.x * math.tan(-0.5061) / 0.145 # -0.45  # turning speed
                         else:
                             twist.angular.z = twist.linear.x * math.tan(-0.5061) / 0.145
                     else:  # use PID algorithm to correct turns on a straight road
@@ -372,7 +381,7 @@ class SelfDrivingNode(Node):
                             self.pid.SetPoint = 130  # the coordinate of the line while the robot is in the middle of the lane
                             self.pid.update(lane_x)
                             if self.machine_type != 'MentorPi_Acker':
-                                twist.angular.z = common.set_range(self.pid.output, -0.1, 0.1)
+                                twist.angular.z = twist.linear.x * math.tan(common.set_range(self.pid.output, -0.1, 0.1)) / 0.145 # common.set_range(self.pid.output, -0.1, 0.1)
                             else:
                                 twist.angular.z = twist.linear.x * math.tan(common.set_range(self.pid.output, -0.1, 0.1)) / 0.145
                         else:
@@ -445,6 +454,11 @@ class SelfDrivingNode(Node):
                         self.count_right = 0
                 elif class_name == 'park':  # obtain the center coordinate of the parking sign
                     self.park_x = center[0]
+                    if self.depth_image is not None:
+                        self.park_depth = self.depth_image[center[1], center[0]]  # 중심 좌표의 깊이 값
+                        self.get_logger().info(f"Depth value at parking sign: {self.park_depth} meters")
+                    else:
+                        self.get_logger().info("Depth image not available")
                 elif class_name == 'red' or class_name == 'green':  # obtain the status of the traffic light
                     self.traffic_signs_status = i
                
