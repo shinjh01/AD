@@ -396,12 +396,13 @@ class SelfDrivingNode(Node):
                 # line following processing
                 result_image, lane_angle, lane_x = self.lane_detect(binary_image, image.copy())  # the coordinate of the line while the robot is in the middle of the lane
                 #self.get_logger().info('\033[1;33m lane_x :  %s , output : %s \033[0m ' % (lane_x, self.pid.output))
-                self.get_logger().info('\033[1;33m lane_x :  %s , turn_right : %s //// %s \033[0m ' % (lane_x, self.turn_right, self.turn_right_distance))
+                #self.get_logger().info('\033[1;33m lane_x :  %s , turn_right : %s //// %s \033[0m ' % (lane_x, self.turn_right, self.turn_right_distance))
                 
                 if time.time() - self.start_turn_time_stamp > 2 and self.turn_right:
                     self.turn_right_distance = -1
                     self.turn_right = False
                     self.start_turn = True
+                    self.get_logger().info("Right start End")
                 elif self.turn_right:
                     self.turn_right_time_stamp = time.time()
                     self.get_logger().info("Right start")
