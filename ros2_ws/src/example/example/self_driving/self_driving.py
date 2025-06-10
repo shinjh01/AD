@@ -158,6 +158,7 @@ class SelfDrivingNode(Node):
         self.count_right_miss = 0
         self.turn_right = False  # right turning sign
         self.turn_right_distance = -1  # right turning sign
+        self.turn_right_time_stamp = 0  # right turning sign
 
         self.last_park_detect = False
         self.count_park = 0  
@@ -396,13 +397,17 @@ class SelfDrivingNode(Node):
                 result_image, lane_angle, lane_x = self.lane_detect(binary_image, image.copy())  # the coordinate of the line while the robot is in the middle of the lane
                 #self.get_logger().info('\033[1;33m lane_x :  %s , output : %s \033[0m ' % (lane_x, self.pid.output))
                 self.get_logger().info('\033[1;33m lane_x :  %s , turn_right : %s //// %s \033[0m ' % (lane_x, self.turn_right, self.turn_right_distance))
-                if lane_x >= 0 and not self.stop:  
-                    if self.turn_right and self.turn_right_distance < 150:
-                        self.turn_right_distance = -1
-                        self.turn_right = False
-                        twist.angular.z =  -0.40  # turning speed
-                        self.get_logger().info("Right start")
-                    elif lane_x > 150:  
+                
+                if time.time() - self.start_turn_time_stamp > 2 and self.turn_right:
+                    self.turn_right_distance = -1
+                    self.turn_right = False
+                    self.start_turn = True
+                elif self.turn_right:
+                    self.turn_right_time_stamp = time.time()
+                    self.get_logger().info("Right start")
+                    twist.angular.z =  twist.linear.x * math.tan(-0.5061) / 0.145 #-0.45  # turning speed
+                elif lane_x >= 0 and not self.stop:  
+                    if lane_x > 150:  
                         self.count_turn += 1
                         if self.count_turn > 5 and not self.start_turn:
                             self.start_turn = True
