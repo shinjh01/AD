@@ -415,6 +415,9 @@ class SelfDrivingNode(Node):
                         self.start_turn_time_stamp = 0
                         self.get_logger().info("Right End")
                         twist.angular.z = twist.linear.x * math.tan(common.set_range(self.pid.output, -0.1, 0.1)) / 0.145
+                    elif self.turn_right:
+                        twist.angular.z =  twist.linear.x * math.tan(-0.5061) / 0.145 #-0.45  # turning speed
+                        self.get_logger().info("Right ing")
                     elif lane_x > 150:  
                         self.count_turn += 1
                         if self.count_turn > 5 and not self.start_turn:
@@ -502,7 +505,7 @@ class SelfDrivingNode(Node):
                 elif class_name == 'right':  # obtain the right turning sign
                     self.count_right += 1
                     self.count_right_miss = 0
-                    if self.count_right >= 2:  # If it is detected multiple times, take the right turning sign to true
+                    if self.count_right >= 4:  # If it is detected multiple times, take the right turning sign to true
                         self.turn_right = True
                         self.count_right = 0
                         self.get_logger().info("is Right")
