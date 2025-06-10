@@ -302,7 +302,6 @@ class SelfDrivingNode(Node):
             result_image = image.copy()
             if self.start:
                 h, w = image.shape[:2]
-                self.get_logger().info(f"--- width : {w} , height : {h}")
 
                 # obtain the binary image of the lane
                 binary_image = self.lane_detect.get_binary(image)
