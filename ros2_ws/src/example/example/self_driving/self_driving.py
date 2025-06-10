@@ -70,11 +70,14 @@ class SelfDrivingNode(Node):
         self.stop_yolov5_client.wait_for_service()
 
         self.timer = self.create_timer(0.0, self.init_process, callback_group=timer_cb_group)
+        # rgb color red and green value tuple list saved
+        self.color_space = [(255,0,0), (0,255,0),(0,0,0)]
 
     def button_callback(self, msg):
         self.get_logger().info(f"Button received: id={msg.id}, state={msg.state}")
         if msg.id == 1 and msg.state == 1:  # Button 1 short press
             self.get_logger().info("Button 1 pressed, starting self-driving")
+            self.rgb_color_publish(0)
             #self.is_running = True  # Start the self-driving process
             self.enter_srv_callback(Trigger.Request(), Trigger.Response())
             self.start = True
@@ -83,6 +86,19 @@ class SelfDrivingNode(Node):
             #self.is_running = False  # Start the self-driving process
             self.exit_srv_callback(Trigger.Request(), Trigger.Response())  # Call the reset motor position function
             self.reset_motor_position()
+    
+    def rgb_color_publish(self, rgb_index):
+        '''
+        rgb_index = 0 -> red
+        rgb_index = 1 -> green
+        rgb_index = 2 -> turn_off 
+        '''
+        color_value = self.color_space[rgb_index]
+        msg = RGBStates()
+        msg.states = [
+           RGBState(index=1, red=color_value[0], green=color_value[1], blue=color_value[2]) 
+        ]
+        self.rgb_publisher.publish(msg)
 
     def reset_motor_position(self):
         """
@@ -172,6 +188,7 @@ class SelfDrivingNode(Node):
 
     def enter_srv_callback(self, request, response):
         self.get_logger().info('\033[1;32m%s\033[0m' % "self driving enter")
+        self.rgb_color_publish(1)
         with self.lock:
             self.start = False
             camera = 'depth_cam'#self.get_parameter('depth_camera_name').value
@@ -185,6 +202,7 @@ class SelfDrivingNode(Node):
 
     def exit_srv_callback(self, request, response):
         self.get_logger().info('\033[1;32m%s\033[0m' % "self driving exit")
+        self.rgb_color_publish(0)
         with self.lock:
             self.start = False
             self.enter = False
@@ -197,18 +215,15 @@ class SelfDrivingNode(Node):
                 self.get_logger().info('\033[1;32m%s\033[0m' % str(e))
             self.mecanum_pub.publish(Twist())
         self.param_init()
-        rgb_msg = RGBStates()
-        rgb_msg.state = [
-            RGBState(index=1, red=0, green=0, blue=0)
-        ]
-        self.rgb_publisher.publish(rgb_msg) 
         
         response.success = True
         response.message = "exit"
+        self.rgb_color_publish(2)
         return response
 
     def set_running_srv_callback(self, request, response):
         self.get_logger().info('\033[1;32m%s\033[0m' % "set_running")
+        self.rgb_clor_publish(1)
         with self.lock:
             self.start = request.data
             if not self.start:
@@ -218,6 +233,7 @@ class SelfDrivingNode(Node):
         return response
 
     def shutdown(self, signum, frame):  # press 'ctrl+c' to close the program
+        self.rgb_color_publish(2)
         self.is_running = False
 
     def image_callback(self, ros_image):  # callback target checking
@@ -232,6 +248,7 @@ class SelfDrivingNode(Node):
     # parking processing
     def park_action(self):
         self.get_logger().info(f"--- park_action:machine_type : {self.machine_type}")
+        self.rgb_color_publish(0)
 
         if self.machine_type == 'MentorPi_Mecanum': 
             twist = Twist()
@@ -323,9 +340,11 @@ class SelfDrivingNode(Node):
                         if self.traffic_signs_status.class_name == 'red' and area < 1000:  # If the robot detects a red traffic light, it will stop
                             self.mecanum_pub.publish(Twist())
                             self.stop = True
+                            self.rgb_color_publish(0)
                         elif self.traffic_signs_status.class_name == 'green':  # If the traffic light is green, the robot will slow down and pass through
                             twist.linear.x = self.slow_down_speed
                             self.stop = False
+                            self.rgb_color_publish(1)
                     if not self.stop:  # In other cases where the robot is not stopped, slow down the speed and calculate the time needed to pass through the crosswalk. The time needed is equal to the length of the crosswalk divided by the driving speed
                         twist.linear.x = self.slow_down_speed
                         if time.time() - self.count_slow_down > self.crosswalk_length / twist.linear.x:
@@ -417,27 +436,6 @@ class SelfDrivingNode(Node):
             #rqt 확인 용 퍼블리쉬
             self.result_publisher.publish(self.bridge.cv2_to_imgmsg(bgr_image, "bgr8"))
 
-            # self.start는 초기 값에 따라 초기에만 설정
-            # self.stop은 물체 감지에 따라 값이 바뀜 그래서 그것을 기준으로 값을 바꾸되
-            # 자동차가 전체적인 동작을 멈추는 상태 즉, set_running_srv_callback에서 request.data가 False인 경우에만
-            # 하드코딩해서 running_state값을 False로 바꿈
-            running_state = True if self.stop else False
-            if not self.start:
-                running_state = False
-
-            if(running_state):
-                rgb_msg = RGBStates()
-                rgb_msg.states = [
-                    RGBState(index=1,red=255,green=0,blue=0)
-                ]
-                self.rgb_publisher.publish(rgb_msg)
-            else:
-                rgb_msg = RGBStates()
-                rgb_msg.states = [
-                    RGBState(index=1, red=0,green=255,blue=0)
-                ]
-                self.rgb_publisher.publish(rgb_msg)
-           
             time_d = 0.03 - (time.time() - time_start)
             if time_d > 0:
                 time.sleep(time_d)
