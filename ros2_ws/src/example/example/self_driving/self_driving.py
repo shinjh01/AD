@@ -25,7 +25,10 @@ from sdk.common import colors, plot_one_box
 from example.self_driving import lane_detect
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
-from ros_robot_controller_msgs.msg import BuzzerState, SetPWMServoState, PWMServoState, ButtonState
+from ros_robot_controller_msgs.msg import BuzzerState, SetPWMServoState, PWMServoState,ButtonState, RGBState , RGBStates
+# 프로그램 종료시의 상황을 통제하기 위한 라이브러리 추가 import
+import signal
+import sys
 
 class SelfDrivingNode(Node):
     def __init__(self, name):
@@ -43,15 +46,16 @@ class SelfDrivingNode(Node):
         self.bridge = CvBridge()
         self.lock = threading.RLock()
         self.colors = common.Colors()
-        # signal.signal(signal.SIGINT, self.shutdown)
+        # 프로그램 종료시의 시그널 수신 여기에 종료 함수를 등록
+        signal.signal(signal.SIGINT, self.shutdown)
+        signal.signal(signal.SIGTERM, self.shutdown)
         self.machine_type = os.environ.get('MACHINE_TYPE')
         self.lane_detect = lane_detect.LaneDetector("yellow")
 
         self.mecanum_pub = self.create_publisher(Twist, '/controller/cmd_vel', 1)
         self.servo_state_pub = self.create_publisher(SetPWMServoState, 'ros_robot_controller/pwm_servo/set_state', 1)
         self.result_publisher = self.create_publisher(Image, '~/image_result', 1)
-#        self.button_publisher = self.create_publisher(ButtonState, '/ros_robot_controller/button', 1)
-#        self.create_service(Trigger, '~/button', self.button_callback) # exit the game
+        self.rgb_publisher = self.create_publisher(RGBStates, 'ros_robot_controller/set_rgb',10)
 
         self.create_service(Trigger, '~/enter', self.enter_srv_callback) # enter the game
         self.create_service(Trigger, '~/exit', self.exit_srv_callback) # exit the game
@@ -71,6 +75,8 @@ class SelfDrivingNode(Node):
         self.stop_yolov5_client.wait_for_service()
 
         self.timer = self.create_timer(0.0, self.init_process, callback_group=timer_cb_group)
+        # rgb color red and green value tuple list saved
+        self.color_space = [(255,0,0), (0,255,0),(0,0,0)]
 
     def button_callback(self, msg):
         self.get_logger().info(f"Button received: id={msg.id}, state={msg.state}")
@@ -84,6 +90,20 @@ class SelfDrivingNode(Node):
             #self.is_running = False  # Start the self-driving process
             self.exit_srv_callback(Trigger.Request(), Trigger.Response())  # Call the reset motor position function
             self.reset_motor_position()
+    
+    # 주어진 인자에 따라 RGBStates 토픽에 색변환 메세지를 보내는 함수 
+    def rgb_color_publish(self, rgb_index):
+        '''
+        rgb_index = 0 -> red
+        rgb_index = 1 -> green
+        rgb_index = 2 -> turn_off 
+        '''
+        color_value = self.color_space[rgb_index]
+        msg = RGBStates()
+        msg.states = [
+           RGBState(index=1, red=color_value[0], green=color_value[1], blue=color_value[2]) 
+        ]
+        self.rgb_publisher.publish(msg)
 
     def reset_motor_position(self):
         """
@@ -146,7 +166,9 @@ class SelfDrivingNode(Node):
         self.count_crosswalk = 0
         self.crosswalk_distance = 0  # distance to the zebra crossing
         self.crosswalk_length = 0.1 + 0.3  # the length of zebra crossing and the robot
-
+        
+        # 속도를 조절하는 인자 부분 
+        # slow_down_speed는 어떤 대상을 인지할 때 자동 조정 0.5, 0.3 지정
         self.start_slow_down = False  # slowing down sign
         self.normal_speed = 0.1  # normal driving speed
         self.slow_down_speed = 0.1  # slowing down speed
@@ -157,6 +179,7 @@ class SelfDrivingNode(Node):
         self.object_sub = None
         self.image_sub = None
         self.objects_info = []
+
 
     def get_node_state(self, request, response):
         response.success = True
@@ -170,6 +193,8 @@ class SelfDrivingNode(Node):
 
     def enter_srv_callback(self, request, response):
         self.get_logger().info('\033[1;32m%s\033[0m' % "self driving enter")
+        # 시작 button 클릭 시에 초록불로 전환
+        self.rgb_color_publish(1)
         with self.lock:
             self.start = False
             camera = 'depth_cam'#self.get_parameter('depth_camera_name').value
@@ -183,6 +208,8 @@ class SelfDrivingNode(Node):
 
     def exit_srv_callback(self, request, response):
         self.get_logger().info('\033[1;32m%s\033[0m' % "self driving exit")
+        # 정지 button 클릭 시에 빨간불로 전환
+        self.rgb_color_publish(0)
         with self.lock:
             self.start = False
             self.enter = False
@@ -195,12 +222,15 @@ class SelfDrivingNode(Node):
                 self.get_logger().info('\033[1;32m%s\033[0m' % str(e))
             self.mecanum_pub.publish(Twist())
         self.param_init()
+        
         response.success = True
         response.message = "exit"
         return response
 
     def set_running_srv_callback(self, request, response):
         self.get_logger().info('\033[1;32m%s\033[0m' % "set_running")
+        # 달리기 시작시 초록불로 전환
+        self.rgb_color_publish(1)
         with self.lock:
             self.start = request.data
             if not self.start:
@@ -210,7 +240,12 @@ class SelfDrivingNode(Node):
         return response
 
     def shutdown(self, signum, frame):  # press 'ctrl+c' to close the program
+        # program종료 시 rgb신호를 (0,0,0)을 주어서 불빛이 꺼지도록 함 
+        self.get_logger().info("Caught shutdown siganl, turn off RGB")
+        self.rgb_color_publish(2)
         self.is_running = False
+        rclpy.shutdown()
+        sys.exit(0)
 
     def image_callback(self, ros_image):  # callback target checking
         cv_image = self.bridge.imgmsg_to_cv2(ros_image, "rgb8")
@@ -224,6 +259,8 @@ class SelfDrivingNode(Node):
     # parking processing
     def park_action(self):
         self.get_logger().info(f"--- park_action:machine_type : {self.machine_type}")
+        # 주차시작시 빨간불로 전환
+        self.rgb_color_publish(0)
 
         if self.machine_type == 'MentorPi_Mecanum': 
             twist = Twist()
@@ -268,6 +305,8 @@ class SelfDrivingNode(Node):
 
     def main(self):
         self.get_logger().info('\033[1;32m -0- %s\033[0m' % self.machine_type)
+        # 프로그램 진입시 빨간불로 대기
+        self.rgb_color_publish(0)
 
         latency = 0
         while self.is_running:
@@ -315,9 +354,13 @@ class SelfDrivingNode(Node):
                         if self.traffic_signs_status.class_name == 'red' and area < 1000:  # If the robot detects a red traffic light, it will stop
                             self.mecanum_pub.publish(Twist())
                             self.stop = True
+                            # 신호등 빨간색 인지시 및 정지시에 빨간불로 전환
+                            self.rgb_color_publish(0)
                         elif self.traffic_signs_status.class_name == 'green':  # If the traffic light is green, the robot will slow down and pass through
                             twist.linear.x = self.slow_down_speed
                             self.stop = False
+                            # 신호등 초록색 인지시 및 출발시에 초록불로 전환
+                            self.rgb_color_publish(1)
                     if not self.stop:  # In other cases where the robot is not stopped, slow down the speed and calculate the time needed to pass through the crosswalk. The time needed is equal to the length of the crosswalk divided by the driving speed
                         twist.linear.x = self.slow_down_speed
                         if time.time() - self.count_slow_down > self.crosswalk_length / twist.linear.x:
@@ -409,6 +452,7 @@ class SelfDrivingNode(Node):
             #rqt 확인 용 퍼블리쉬
             self.result_publisher.publish(self.bridge.cv2_to_imgmsg(bgr_image, "bgr8"))
 
+            
             #한 루프가 0.03초(약 33FPS)보다 빨리 끝났으면 남은 시간만큼 대기합니다.
             latency = time.time() - time_start
             time_d = 0.03 - latency
