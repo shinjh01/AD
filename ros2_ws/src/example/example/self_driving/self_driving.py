@@ -404,7 +404,7 @@ class SelfDrivingNode(Node):
                     #    self.turn_right = False
                     #    self.start_turn = True
                     #    self.get_logger().info("Right start End")
-                    if self.turn_right and (self.start_turn_time_stamp <= 0 or time.time() - self.start_turn_time_stamp <= 2):
+                    if self.turn_right and (self.start_turn_time_stamp <= 0):
                         self.start_turn_time_stamp = time.time()
                         twist.angular.z =  twist.linear.x * math.tan(-0.5061) / 0.145 #-0.45  # turning speed
                         self.get_logger().info("Right start")
