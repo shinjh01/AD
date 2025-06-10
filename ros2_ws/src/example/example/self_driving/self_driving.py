@@ -25,7 +25,7 @@ from sdk.common import colors, plot_one_box
 from example.self_driving import lane_detect
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
-from ros_robot_controller_msgs.msg import BuzzerState, SetPWMServoState, PWMServoState
+from ros_robot_controller_msgs.msg import BuzzerState, SetPWMServoState, PWMServoState, ButtonState
 
 class SelfDrivingNode(Node):
     def __init__(self, name):
@@ -50,10 +50,17 @@ class SelfDrivingNode(Node):
         self.mecanum_pub = self.create_publisher(Twist, '/controller/cmd_vel', 1)
         self.servo_state_pub = self.create_publisher(SetPWMServoState, 'ros_robot_controller/pwm_servo/set_state', 1)
         self.result_publisher = self.create_publisher(Image, '~/image_result', 1)
+#        self.button_publisher = self.create_publisher(ButtonState, '/ros_robot_controller/button', 1)
+#        self.create_service(Trigger, '~/button', self.button_callback) # exit the game
 
         self.create_service(Trigger, '~/enter', self.enter_srv_callback) # enter the game
         self.create_service(Trigger, '~/exit', self.exit_srv_callback) # exit the game
         self.create_service(SetBool, '~/set_running', self.set_running_srv_callback)
+
+        # ButtonPressReceiver integration
+
+        self.create_subscription(ButtonState, '/ros_robot_controller/button', self.button_callback, 10)
+
         # self.heart = Heart(self.name + '/heartbeat', 5, lambda _: self.exit_srv_callback(None))
         timer_cb_group = ReentrantCallbackGroup()
         self.client = self.create_client(Trigger, '/yolov5_ros2/init_finish')
@@ -64,6 +71,33 @@ class SelfDrivingNode(Node):
         self.stop_yolov5_client.wait_for_service()
 
         self.timer = self.create_timer(0.0, self.init_process, callback_group=timer_cb_group)
+
+    def button_callback(self, msg):
+        self.get_logger().info(f"Button received: id={msg.id}, state={msg.state}")
+        if msg.id == 1 and msg.state == 1:  # Button 1 short press
+            self.get_logger().info("Button 1 pressed, starting self-driving")
+            #self.is_running = True  # Start the self-driving process
+            self.enter_srv_callback(Trigger.Request(), Trigger.Response())
+            self.start = True
+        elif msg.id == 2 and msg.state == 1:  # Button 1 short press
+            self.get_logger().info("Button 2 pressed, stop self-driving")
+            #self.is_running = False  # Start the self-driving process
+            self.exit_srv_callback(Trigger.Request(), Trigger.Response())  # Call the reset motor position function
+            self.reset_motor_position()
+
+    def reset_motor_position(self):
+        """
+        Reset the motor position to 0.
+        """
+        twist = Twist()
+        twist.linear.x = 0.0
+        twist.linear.y = 0.0
+        twist.linear.z = 0.0
+        twist.angular.x = 0.0
+        twist.angular.y = 0.0
+        twist.angular.z = 0.0
+        self.mecanum_pub.publish(twist)  # Publish the zeroed Twist message
+        self.get_logger().info("Motor position reset to 0")
 
     def init_process(self):
         self.timer.cancel()
@@ -78,7 +112,8 @@ class SelfDrivingNode(Node):
             self.enter_srv_callback(Trigger.Request(), Trigger.Response())
             request = SetBool.Request()
             request.data = True
-            self.set_running_srv_callback(request, SetBool.Response())
+            #파라미터로 처리하는것이나 어차피 시작은 멈춘 상태여야하므로.
+            #self.set_running_srv_callback(request, SetBool.Response())
 
         #self.park_action() 
         threading.Thread(target=self.main, daemon=True).start()
@@ -149,6 +184,8 @@ class SelfDrivingNode(Node):
     def exit_srv_callback(self, request, response):
         self.get_logger().info('\033[1;32m%s\033[0m' % "self driving exit")
         with self.lock:
+            self.start = False
+            self.enter = False
             try:
                 if self.image_sub is not None:
                     self.image_sub.unregister()
@@ -186,6 +223,8 @@ class SelfDrivingNode(Node):
     
     # parking processing
     def park_action(self):
+        self.get_logger().info(f"--- park_action:machine_type : {self.machine_type}")
+
         if self.machine_type == 'MentorPi_Mecanum': 
             twist = Twist()
             twist.linear.y = -0.2
@@ -228,6 +267,9 @@ class SelfDrivingNode(Node):
         self.mecanum_pub.publish(Twist())
 
     def main(self):
+        self.get_logger().info('\033[1;32m -0- %s\033[0m' % self.machine_type)
+
+        latency = 0
         while self.is_running:
             time_start = time.time()
             try:
@@ -248,8 +290,11 @@ class SelfDrivingNode(Node):
                 twist = Twist()
 
                 # if detecting the zebra crossing, start to slow down
-                self.get_logger().info('\033[1;33m%s\033[0m' % self.crosswalk_distance)
+                self.get_logger().info('\033[1;33m -- %s\033[0m  / %s ' % (self.crosswalk_distance , latency))
+                #횡단 보도 감지 및 감속 
+                # 횡단보다와의 거리가 70픽셀 이상이고 아직 감속전이라면 3번 연속 감지시 감속 시작.
                 if 70 < self.crosswalk_distance and not self.start_slow_down:  # The robot starts to slow down only when it is close enough to the zebra crossing
+                    #반복시 감속 처리 확인
                     self.count_crosswalk += 1
                     if self.count_crosswalk == 3:  # judge multiple times to prevent false detection
                         self.count_crosswalk = 0
@@ -258,6 +303,11 @@ class SelfDrivingNode(Node):
                 else:  # need to detect continuously, otherwise reset
                     self.count_crosswalk = 0
 
+                # 감속처리 및 신호등 인식
+                # 감속 플래그가 켜지면 신호등 상태를 확인합니다.
+                # 빨간불이면 정지, 초록불이면 감속 후 통과.
+                # 신호등이 없거나 정지 상태가 아니면 감속 속도로 주행, 일정 시간이 지나면 감속 해제.
+                # 감속 조건이 아니면 정상 속도로 주행.
                 # deceleration processing
                 if self.start_slow_down:
                     if self.traffic_signs_status is not None:
@@ -275,21 +325,32 @@ class SelfDrivingNode(Node):
                 else:
                     twist.linear.x = self.normal_speed  # go straight with normal speed
 
+                #주차 표지판 인식.
                 # If the robot detects a stop sign and a crosswalk, it will slow down to ensure stable recognition
                 if 0 < self.park_x and 135 < self.crosswalk_distance:
                     twist.linear.x = self.slow_down_speed
                     if not self.start_park and 180 < self.crosswalk_distance:  # When the robot is close enough to the crosswalk, it will start parking
                         self.count_park += 1  
+                        self.park_x = -1 # park 표지판 초기화
+                        self.get_logger().info(f"--- close park crosswalk_distance : {self.crosswalk_distance} , count_park : {self.count_park}")
                         if self.count_park >= 15:  
                             self.mecanum_pub.publish(Twist())  
                             self.start_park = True
                             self.stop = True
+                            self.get_logger().info(f"--- start park : {self.count_park}")
                             threading.Thread(target=self.park_action).start()
                     else:
                         self.count_park = 0  
-
+                
+                # 차선 추적 및 PID 제어
+                # 차선 중심 좌표(lane_x)가 감지되고 정지 상태가 아니면
+                # 차선이 오른쪽으로 치우쳐 있으면(150 이상) 우회전 동작을 시작.
+                # 그렇지 않으면 PID 제어로 차선 중심을 따라 주행.
+                # 각 차종에 따라 회전 방식이 다름.
+                # 차선이 감지되지 않으면 PID 상태를 초기화.
                 # line following processing
                 result_image, lane_angle, lane_x = self.lane_detect(binary_image, image.copy())  # the coordinate of the line while the robot is in the middle of the lane
+                self.get_logger().info('\033[1;33m lane_x :  %s , output : %s \033[0m ' % (lane_x, self.pid.output))
                 if lane_x >= 0 and not self.stop:  
                     if lane_x > 150:  
                         self.count_turn += 1
@@ -298,7 +359,7 @@ class SelfDrivingNode(Node):
                             self.count_turn = 0
                             self.start_turn_time_stamp = time.time()
                         if self.machine_type != 'MentorPi_Acker':
-                            twist.angular.z = -0.45  # turning speed
+                            twist.angular.z =  twist.linear.x * math.tan(-0.5061) / 0.145 #-0.45  # turning speed
                         else:
                             twist.angular.z = twist.linear.x * math.tan(-0.5061) / 0.145
                     else:  # use PID algorithm to correct turns on a straight road
@@ -309,7 +370,7 @@ class SelfDrivingNode(Node):
                             self.pid.SetPoint = 130  # the coordinate of the line while the robot is in the middle of the lane
                             self.pid.update(lane_x)
                             if self.machine_type != 'MentorPi_Acker':
-                                twist.angular.z = common.set_range(self.pid.output, -0.1, 0.1)
+                                twist.angular.z = twist.linear.x * math.tan(common.set_range(self.pid.output, -0.1, 0.1)) / 0.145#common.set_range(self.pid.output, -0.1, 0.1)
                             else:
                                 twist.angular.z = twist.linear.x * math.tan(common.set_range(self.pid.output, -0.1, 0.1)) / 0.145
                         else:
@@ -319,8 +380,9 @@ class SelfDrivingNode(Node):
                 else:
                     self.pid.clear()
 
-             
-                if self.objects_info:
+                #rqt로 볼때 화면에 인식 박스를 그려줌. 기본 실행시 오히려
+                #성능상 이점이 없으므로 False처리. 추후 argument로 받도록 변경
+                if False and self.objects_info:
                     for i in self.objects_info:
                         box = i.box
                         class_name = i.class_name
@@ -335,21 +397,25 @@ class SelfDrivingNode(Node):
                         )
 
             else:
+                self.get_logger().info(f"plese start button")
                 time.sleep(0.01)
-
             
             bgr_image = cv2.cvtColor(result_image, cv2.COLOR_RGB2BGR)
+            # self.display가 True일 때만 FPS 표시 등 디스플레이 관련 처리를 합니다
             if self.display:
                 self.fps.update()
+                #초당 FPS계산 및 오버레이.
                 bgr_image = self.fps.show_fps(bgr_image)
-
-            
+            #rqt 확인 용 퍼블리쉬
             self.result_publisher.publish(self.bridge.cv2_to_imgmsg(bgr_image, "bgr8"))
 
-           
-            time_d = 0.03 - (time.time() - time_start)
+            #한 루프가 0.03초(약 33FPS)보다 빨리 끝났으면 남은 시간만큼 대기합니다.
+            latency = time.time() - time_start
+            time_d = 0.03 - latency
+            #일정한 주기로 루프가 돌도록 보장합니다.
             if time_d > 0:
                 time.sleep(time_d)
+
         self.mecanum_pub.publish(Twist())
         rclpy.shutdown()
 
