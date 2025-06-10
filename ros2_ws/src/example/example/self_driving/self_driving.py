@@ -290,7 +290,7 @@ class SelfDrivingNode(Node):
                 twist = Twist()
 
                 # if detecting the zebra crossing, start to slow down
-                self.get_logger().info('\033[1;33m -- %s\033[0m  / %s ' % (self.crosswalk_distance , latency))
+                #self.get_logger().info('\033[1;33m -- %s\033[0m  / latency : %s ' % (self.crosswalk_distance , latency))
                 #횡단 보도 감지 및 감속 
                 # 횡단보다와의 거리가 70픽셀 이상이고 아직 감속전이라면 3번 연속 감지시 감속 시작.
                 if 70 < self.crosswalk_distance and not self.start_slow_down:  # The robot starts to slow down only when it is close enough to the zebra crossing
@@ -328,6 +328,8 @@ class SelfDrivingNode(Node):
                 #주차 표지판 인식.
                 # If the robot detects a stop sign and a crosswalk, it will slow down to ensure stable recognition
                 if 0 < self.park_x and 135 < self.crosswalk_distance:
+                    self.get_logger().info(f"--- self.park_x : {self.park_x} , crosswalk_distance : {self.crosswalk_distance}")
+
                     twist.linear.x = self.slow_down_speed
                     if not self.start_park and 180 < self.crosswalk_distance:  # When the robot is close enough to the crosswalk, it will start parking
                         self.count_park += 1  
@@ -350,7 +352,7 @@ class SelfDrivingNode(Node):
                 # 차선이 감지되지 않으면 PID 상태를 초기화.
                 # line following processing
                 result_image, lane_angle, lane_x = self.lane_detect(binary_image, image.copy())  # the coordinate of the line while the robot is in the middle of the lane
-                self.get_logger().info('\033[1;33m lane_x :  %s , output : %s \033[0m ' % (lane_x, self.pid.output))
+                #self.get_logger().info('\033[1;33m lane_x :  %s , output : %s \033[0m ' % (lane_x, self.pid.output))
                 if lane_x >= 0 and not self.stop:  
                     if lane_x > 150:  
                         self.count_turn += 1
@@ -359,7 +361,7 @@ class SelfDrivingNode(Node):
                             self.count_turn = 0
                             self.start_turn_time_stamp = time.time()
                         if self.machine_type != 'MentorPi_Acker':
-                            twist.angular.z =  twist.linear.x * math.tan(-0.5061) / 0.145 #-0.45  # turning speed
+                            twist.angular.z =  -0.45  # turning speed
                         else:
                             twist.angular.z = twist.linear.x * math.tan(-0.5061) / 0.145
                     else:  # use PID algorithm to correct turns on a straight road
@@ -370,7 +372,7 @@ class SelfDrivingNode(Node):
                             self.pid.SetPoint = 130  # the coordinate of the line while the robot is in the middle of the lane
                             self.pid.update(lane_x)
                             if self.machine_type != 'MentorPi_Acker':
-                                twist.angular.z = twist.linear.x * math.tan(common.set_range(self.pid.output, -0.1, 0.1)) / 0.145#common.set_range(self.pid.output, -0.1, 0.1)
+                                twist.angular.z = common.set_range(self.pid.output, -0.1, 0.1)
                             else:
                                 twist.angular.z = twist.linear.x * math.tan(common.set_range(self.pid.output, -0.1, 0.1)) / 0.145
                         else:
