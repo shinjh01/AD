@@ -122,12 +122,17 @@ class LaneDetector(object):
 
     def get_binary(self, image):
         # recognize color through LAB space
+        # 1. RGB 이미지를 LAB 색상 공간으로 변환
         img_lab = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)  # convert RGB to LAB
+        # 2. 가우시안 블러를 적용하여 노이즈 제거
         img_blur = cv2.GaussianBlur(img_lab, (3, 3), 3)  # Gaussian blur denoising
+        # 3. 특정 색상 범위를 기반으로 이진화
         mask = cv2.inRange(img_blur, tuple(lab_data['lab']['Stereo'][self.target_color]['min']), tuple(lab_data['lab']['Stereo'][self.target_color]['max']))  # 二值化
+        # 4. 침식(Erosion) 연산으로 작은 노이즈 제거
         eroded = cv2.erode(mask, cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)))  # erode
+         # 5. 팽창(Dilation) 연산으로 객체를 확장
         dilated = cv2.dilate(eroded, cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)))  # dilate
-
+        # 6. 결과 이진화 이미지 반환
         return dilated
 
     def __call__(self, image, result_image):
