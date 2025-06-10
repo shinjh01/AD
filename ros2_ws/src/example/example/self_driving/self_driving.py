@@ -388,12 +388,13 @@ class SelfDrivingNode(Node):
                 result_image, lane_angle, lane_x = self.lane_detect(binary_image, image.copy())  # the coordinate of the line while the robot is in the middle of the lane
                 #self.get_logger().info('\033[1;33m lane_x :  %s , output : %s \033[0m ' % (lane_x, self.pid.output))
                 if lane_x >= 0 and not self.stop:  
-                    if lane_x > 150:  
+                    if lane_x > 150 or self.turn_right:  
                         self.count_turn += 1
                         if self.count_turn > 5 and not self.start_turn:
                             self.start_turn = True
                             self.count_turn = 0
                             self.start_turn_time_stamp = time.time()
+                            self.turn_right = False
                         if self.machine_type != 'MentorPi_Acker':
                             twist.angular.z =  twist.linear.x * math.tan(-0.5061) / 0.145 # -0.45  # turning speed
                         else:
