@@ -336,15 +336,14 @@ class SelfDrivingNode(Node):
 
                 #주차 표지판 인식.
                 # If the robot detects a stop sign and a crosswalk, it will slow down to ensure stable recognition
-                if 0 < self.park_x and 135 < self.crosswalk_distance:
-                    self.get_logger().info(f"--- self.park_x : {self.park_x} , crosswalk_distance : {self.crosswalk_distance}")
+                if 0 < self.park_x and 500 > self.park_depth:
+                    self.get_logger().info(f"--- self.park_x : {self.park_x} , park_depth : {self.park_depth}, count_park : {self.count_park}")
 
                     twist.linear.x = self.slow_down_speed
-                    if not self.start_park and 180 < self.crosswalk_distance:  # When the robot is close enough to the crosswalk, it will start parking
+                    if not self.start_park and 300 > self.park_depth:  # When the robot is close enough to the crosswalk, it will start parking
                         self.count_park += 1  
                         self.park_x = -1 # park 표지판 초기화
-                        self.get_logger().info(f"--- close park crosswalk_distance : {self.crosswalk_distance} , count_park : {self.count_park}")
-                        if self.count_park >= 15:  
+                        if self.count_park >= 5:  
                             self.mecanum_pub.publish(Twist())  
                             self.start_park = True
                             self.stop = True
@@ -456,9 +455,7 @@ class SelfDrivingNode(Node):
                     self.park_x = center[0]
                     if self.depth_image is not None:
                         self.park_depth = self.depth_image[center[1], center[0]]  # 중심 좌표의 깊이 값
-                        self.get_logger().info(f"Depth value at parking sign: {self.park_depth} meters")
-                    else:
-                        self.get_logger().info("Depth image not available")
+                        self.get_logger().info(f"Depth value at parking sign: {self.park_depth} ")
                 elif class_name == 'red' or class_name == 'green':  # obtain the status of the traffic light
                     self.traffic_signs_status = i
                
