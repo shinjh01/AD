@@ -411,16 +411,24 @@ class SelfDrivingNode(Node):
             #rqt 확인 용 퍼블리쉬
             self.result_publisher.publish(self.bridge.cv2_to_imgmsg(bgr_image, "bgr8"))
 
-            if(self.start):
+            # self.start는 초기 값에 따라 초기에만 설정
+            # self.stop은 물체 감지에 따라 값이 바뀜 그래서 그것을 기준으로 값을 바꾸되
+            # 자동차가 전체적인 동작을 멈추는 상태 즉, set_running_srv_callback에서 request.data가 False인 경우에만
+            # 하드코딩해서 running_state값을 False로 바꿈
+            running_state = True if self.stop else False
+            if not self.start:
+                running_state = False
+
+            if(running_state):
                 rgb_msg = RGBStates()
                 rgb_msg.states = [
-                    RGBState(index=1,red=0,green=255,blue=0)
+                    RGBState(index=1,red=255,green=0,blue=0)
                 ]
                 self.rgb_publisher.publish(rgb_msg)
-            elif(self.stop):
+            else:
                 rgb_msg = RGBStates()
                 rgb_msg.states = [
-                    RGBState(index=1, red=255,green=0,blue=0)
+                    RGBState(index=1, red=0,green=255,blue=0)
                 ]
                 self.rgb_publisher.publish(rgb_msg)
            
