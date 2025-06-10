@@ -493,8 +493,8 @@ class SelfDrivingNode(Node):
                         self.turn_right = True
                         self.count_right = 0
                     
-                    if center[1] > turn_right_distance:
-                        turn_right_distance = center[1]
+                    if center[1] > self.turn_right_distance:
+                        self.turn_right_distance = center[1]
 
                 elif class_name == 'park':  # obtain the center coordinate of the parking sign
                     self.park_x = center[0]
