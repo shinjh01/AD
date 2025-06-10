@@ -301,6 +301,8 @@ class SelfDrivingNode(Node):
 
                 ########### added js 주차표지판은 제일 먼저 처리.
                 if self.start_park:
+                    self.get_logger().info(f"--- 1 park : {self.crosswalk_distance}")
+
                     if 100 > self.crosswalk_distance:
                             self.mecanum_pub.publish(Twist())  
                             #self.start_park = True
