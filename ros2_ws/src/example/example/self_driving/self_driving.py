@@ -481,6 +481,8 @@ class SelfDrivingNode(Node):
                 elif class_name == 'park':  # obtain the center coordinate of the parking sign
                     self.get_logger().info(f"=========== finded park : {self.count_park}")
 
+                    self.get_logger().info(f"=========== finded park : {self.count_park}")
+
                     self.park_count += 1
                     if self.park_count >= 5:
                         self.park_x = center[0]
