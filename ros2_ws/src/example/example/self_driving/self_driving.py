@@ -25,7 +25,7 @@ from sdk.common import colors, plot_one_box
 from example.self_driving import lane_detect
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
-from ros_robot_controller_msgs.msg import BuzzerState, SetPWMServoState, PWMServoState,ButtonState, RGBState , RGBStates
+from ros_robot_controller_msgs.msg import BuzzerState, SetPWMServoState, PWMServoState,ButtonState, LedState, RGBState , RGBStates
 # 프로그램 종료시의 상황을 통제하기 위한 라이브러리 추가 import
 import signal
 import sys
@@ -56,6 +56,8 @@ class SelfDrivingNode(Node):
         self.servo_state_pub = self.create_publisher(SetPWMServoState, 'ros_robot_controller/pwm_servo/set_state', 1)
         self.result_publisher = self.create_publisher(Image, '~/image_result', 1)
         self.rgb_publisher = self.create_publisher(RGBStates, 'ros_robot_controller/set_rgb',10)
+        # 점멸을 위한 led 퍼블리셔
+        self.led_publisher = self.create_publisher(LedState, 'ros_robot_controller/set_led',10)
 
         self.create_service(Trigger, '~/enter', self.enter_srv_callback) # enter the game
         self.create_service(Trigger, '~/exit', self.exit_srv_callback) # exit the game
@@ -104,6 +106,26 @@ class SelfDrivingNode(Node):
            RGBState(index=1, red=color_value[0], green=color_value[1], blue=color_value[2]) 
         ]
         self.rgb_publisher.publish(msg)
+    
+    # p-07 우회전시 LED 점멸 및 노란색 RGB 표시 
+    def turn_right_signal_publish(self):
+        '''
+        ''' 
+        led_msg = LedState()
+        led_msg.id = 1
+        led_msg.on_time = 0.5
+        led_msg.off_time = 0.5
+        led_msg.repeat = 10
+
+        rgb_msg = RGBStates()
+        rgb_msg.states = [
+            RGBState(index=1, red=255, green=255, blue=0)
+        ]
+        
+        self.rgb_publisher.publish(rgb_msg)
+        self.led_publisher.publish(led_msg)
+        self.get_logger().info("LED yellow blinking for turnning right")
+        
 
     def reset_motor_position(self):
         """
@@ -482,9 +504,11 @@ class SelfDrivingNode(Node):
                 elif class_name == 'right':  # obtain the right turning sign
                     self.count_right += 1
                     self.count_right_miss = 0
+                    self.led_publisher()
                     if self.count_right >= 5:  # If it is detected multiple times, take the right turning sign to true
                         self.turn_right = True
                         self.count_right = 0
+                        self.rgb_publisher(1)
                 elif class_name == 'park':  # obtain the center coordinate of the parking sign
                     self.park_x = center[0]
                 elif class_name == 'red' or class_name == 'green':  # obtain the status of the traffic light
