@@ -267,18 +267,18 @@ class SelfDrivingNode(Node):
         self.mecanum_pub.publish(Twist())
         self.exit_srv_callback(Trigger.Request(), Trigger.Response()) 
 
-    def calc_object_are(self, obj): 
+    def calc_object_area(self, obj): 
         if obj == None:
             return -1
         else:
-            return abs(self.obj.box[0] - self.obj.box[2]) * abs(self.obj.box[1] - self.obj.box[3])
+            return abs(obj.box[0] - obj.box[2]) * abs(obj.box[1] - obj.box[3])
 
 
     def main(self):
         self.get_logger().info('\033[1;32m -0- %s\033[0m' % self.machine_type)
         # 프로그램 진입시 빨간불로 대기
         self.rgb_color_publish(0)
-
+        cr_time = 0
         latency = 0
         while self.is_running:
             time_start = time.time()
@@ -312,8 +312,25 @@ class SelfDrivingNode(Node):
                         self.count_slow_down = time.time()  # fixing time for slowing down
                 else:  # need to detect continuously, otherwise reset
                     self.count_crosswalk = 0
+                
+                crosswalk_area = self.calc_object_area(self.crosswalk_obj)
+                park_area = self.calc_object_area(self.park_obj)
+                turn_right_area = self.calc_object_area(self.turn_right_obj)
+                if (crosswalk_area > 0 and crosswalk_area < 5000) or park_area > 0 or turn_right_area > 0:
+                    self.get_logger().info(f"c : {crosswalk_area}  / p : {park_area} / r : {turn_right_area}")
+                
+                self.crosswalk_obj = None
+                self.turn_right_obj = None
+                self.park_obj = None
 
-                self.get_logger().info(f"c : {self.calc_object_are(self.crosswalk_obj)}  / p : {self.calc_object_are(self.park_obj)} / r : {self.calc_object_are(self.turn_right_obj)}")
+                if crosswalk_area > 1700 and crosswalk_area < 3000 and cr_time <= 0:
+                    self.mecanum_pub.publish(Twist())
+                    cr_time = time.time()
+                    time.sleep(1)
+                    self.get_logger().info(f"crosswalk stop")
+                elif time.time() - cr_time > 3:
+                    cr_time =0 
+                    
 
                 # 감속처리 및 신호등 인식
                 # 감속 플래그가 켜지면 신호등 상태를 확인합니다.
@@ -344,12 +361,9 @@ class SelfDrivingNode(Node):
                 #주차 표지판 인식.
                 #우회전 후 파크표지판 인식시.
                 # If the robot detects a stop sign and a crosswalk, it will slow down to ensure stable recognition
-                if 0 < self.park_x and self.turn_right_start and not self.turn_right:
+                if crosswalk_area > 3000 and park_area > 900:
                     twist.linear.x = self.slow_down_speed
                     twist = Twist()
-                    twist.linear.x = self.slow_down_speed  # 직진 속도 설정
-                    self.mecanum_pub.publish(twist)  # 모터에 명령 전송
-                    time.sleep(3)  # 3초 동안 대기
                     self.mecanum_pub.publish(Twist())  
                     self.stop = True
                     self.get_logger().info(f"--- start park : {self.count_park}")
@@ -375,17 +389,17 @@ class SelfDrivingNode(Node):
                     # 하단 조건에서 우회전 종료시에도 self.turn_right_start를 false로 변경하지 않은 이유는
                     # 우회전 표시 후 바로 직진-주차가 되기때문이다.
 
-                    if not self.turn_right_start and self.turn_right:
+                    if not self.turn_right_start and turn_right_area > 500 and crosswalk_area > 3000:
+                        self.get_logger().info("Right start")                        
+                        time.sleep(2)
                         self.turn_right_start = True
                         self.start_turn_time_stamp = time.monotonic() * 1000
                         twist.angular.z =  twist.linear.x * math.tan(-0.6061) / 0.145 #-0.45  # turning speed
-                        self.get_logger().info("Right start")                        
-                    elif self.turn_right_start and self.turn_right and (time.monotonic() * 1000) - self.start_turn_time_stamp > 2000:
-                        self.turn_right_distance = -1
-                        self.turn_right = False
+                    elif self.turn_right_start and (time.monotonic() * 1000) - self.start_turn_time_stamp > 2000:
                         self.start_turn_time_stamp = 0
+                        self.turn_right_start = False
                         self.get_logger().info("Right End")
-                    elif self.turn_right_start and self.turn_right and (time.monotonic() * 1000) - self.start_turn_time_stamp <= 2000:
+                    elif self.turn_right_start and (time.monotonic() * 1000) - self.start_turn_time_stamp <= 2000:
                         twist.angular.z =  twist.linear.x * math.tan(-0.6061) / 0.145 #-0.45  # turning speed
                         self.get_logger().info("Right ing")
                     elif lane_x > 130:  
@@ -406,7 +420,7 @@ class SelfDrivingNode(Node):
                             self.pid.SetPoint = 130  # the coordinate of the line while the robot is in the middle of the lane
                             self.pid.update(lane_x)
                             if self.machine_type != 'MentorPi_Acker':
-                                twist.angular.z = twist.linear.x * math.tan(common.set_range(self.pid.output, -0.1, 0.1)) / 0.145#common.set_range(self.pid.output, -0.1, 0.1)
+                                twist.angular.z = common.set_range(self.pid.output, -0.1, 0.1)
                             else:
                                 twist.angular.z = twist.linear.x * math.tan(common.set_range(self.pid.output, -0.1, 0.1)) / 0.145
                         else:
