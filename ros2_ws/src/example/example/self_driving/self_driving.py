@@ -146,16 +146,19 @@ class SelfDrivingNode(Node):
         self.turn_right_distance = -1  # right turning sign
         self.turn_right_time_stamp = 0  # right turning sign
         self.turn_right_start = False  # right turning sign
+        self.turn_right_obj = None
 
         self.last_park_detect = False
         self.count_park = 0  
         self.stop = False  # stopping sign
         self.start_park = False  # start parking sign
+        self.park_obj = None
 
         self.count_crosswalk = 0
         self.crosswalk_distance = 0  # distance to the zebra crossing
         self.crosswalk_length = 0.1 + 0.3  # the length of zebra crossing and the robot
-        
+        self.crosswalk_obj = None
+
         # 속도를 조절하는 인자 부분 
         # slow_down_speed는 어떤 대상을 인지할 때 자동 조정 0.5, 0.3 지정
         self.start_slow_down = False  # slowing down sign
@@ -264,6 +267,13 @@ class SelfDrivingNode(Node):
         self.mecanum_pub.publish(Twist())
         self.exit_srv_callback(Trigger.Request(), Trigger.Response()) 
 
+    def calc_object_are(self, obj): 
+        if obj == None:
+            return -1
+        else:
+            return abs(self.obj.box[0] - self.obj.box[2]) * abs(self.obj.box[1] - self.obj.box[3])
+
+
     def main(self):
         self.get_logger().info('\033[1;32m -0- %s\033[0m' % self.machine_type)
         # 프로그램 진입시 빨간불로 대기
@@ -302,6 +312,8 @@ class SelfDrivingNode(Node):
                         self.count_slow_down = time.time()  # fixing time for slowing down
                 else:  # need to detect continuously, otherwise reset
                     self.count_crosswalk = 0
+
+                self.get_logger().info(f"c : {self.calc_object_are(self.crosswalk_obj)}  / p : {self.calc_object_are(self.park_obj)} / r : {self.calc_object_are(self.turn_right_obj)}")
 
                 # 감속처리 및 신호등 인식
                 # 감속 플래그가 켜지면 신호등 상태를 확인합니다.
@@ -426,17 +438,17 @@ class SelfDrivingNode(Node):
             
             bgr_image = cv2.cvtColor(result_image, cv2.COLOR_RGB2BGR)
             # self.display가 True일 때만 FPS 표시 등 디스플레이 관련 처리를 합니다
-            if True:
+            if False:
                 self.fps.update()
                 #초당 FPS계산 및 오버레이.
                 bgr_image = self.fps.show_fps(bgr_image)
             #rqt 확인 용 퍼블리쉬
-            self.result_publisher.publish(self.bridge.cv2_to_imgmsg(bgr_image, "bgr8"))
+            #self.result_publisher.publish(self.bridge.cv2_to_imgmsg(bgr_image, "bgr8"))
 
             
-            #한 루프가 0.03초(약 33FPS)보다 빨리 끝났으면 남은 시간만큼 대기합니다.
+            #한 루프가 0.06초( 약 16FPS) 보다 빨리 끝났으면 남은 시간만큼 대기합니다.
             latency = time.time() - time_start
-            time_d = 0.05 - latency
+            time_d = 0.06 - latency
             #일정한 주기로 루프가 돌도록 보장합니다.
             if time_d > 0:
                 time.sleep(time_d)
@@ -451,9 +463,11 @@ class SelfDrivingNode(Node):
         if self.objects_info == []:  # If it is not recognized, reset the variable
             self.traffic_signs_status = None
             self.crosswalk_distance = 0
+            self.crosswalk_obj = None
+            self.turn_right_obj = None
+            self.park_obj = None
         else:
             min_distance = 0
-            corsswalk_cnt = 0
 
             object_counts = {class_name: 0 for class_name in self.classes}
 
@@ -466,28 +480,25 @@ class SelfDrivingNode(Node):
                 object_counts[class_name] += 1
 
                 if class_name == 'crosswalk':  
-                    corsswalk_cnt += 1
                     if center[1] > min_distance:  # Obtain recent y-axis pixel coordinate of the crosswalk
                         min_distance = center[1]
+                    self.crosswalk_obj = i
+
                 elif class_name == 'right':  # obtain the right turning sign
                     self.count_right += 1
-                    self.turn_right_distance = center[1]
-                    self.get_logger().info('\033[1;35m%s , %s , %s\033[0m' % ("is Right", self.count_right, self.turn_right_distance))
-                    
+                    self.turn_right_distance = center[1]                    
                     if self.count_right >= 4:  # If it is detected multiple times, take the right turning sign to true
                         self.count_right = 0
                         self.turn_right = True
+                    self.turn_right_obj = i
 
                 elif class_name == 'park':  # obtain the center coordinate of the parking sign
-                    self.get_logger().info(f"=========== finded park : {self.count_park}")
-
-                    self.get_logger().info(f"=========== finded park : {self.count_park}")
-
                     self.park_count += 1
                     if self.park_count >= 5:
                         self.park_x = center[0]
                         self.park_count = 0
                     
+                    self.park_obj = i
                 elif class_name == 'red' or class_name == 'green':  # obtain the status of the traffic light
                     self.traffic_signs_status = i
                
