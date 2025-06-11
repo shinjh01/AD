@@ -134,6 +134,7 @@ class SelfDrivingNode(Node):
         self.detect_turn_right = False
         self.detect_far_lane = False
         self.park_x = -1  # obtain the x-pixel coordinate of a parking sign
+        self.park_count = 0  # obtain the x-pixel coordinate of a parking sign
 
         self.start_turn_time_stamp = 0
         self.count_turn = 0
@@ -144,6 +145,7 @@ class SelfDrivingNode(Node):
         self.turn_right = False  # right turning sign
         self.turn_right_distance = -1  # right turning sign
         self.turn_right_time_stamp = 0  # right turning sign
+        self.turn_right_start = False  # right turning sign
 
         self.last_park_detect = False
         self.count_park = 0  
@@ -194,7 +196,7 @@ class SelfDrivingNode(Node):
         return response
 
     def exit_srv_callback(self, request, response):
-        self.get_logger().info('\033[1;32m%s\033[0m' % "self driving exit")
+        self.get_logger().info("------------ self driving exit start ")
         # 정지 button 클릭 시에 빨간불로 전환
         self.rgb_color_publish(0)
         with self.lock:
@@ -213,6 +215,8 @@ class SelfDrivingNode(Node):
         self.param_init()
         response.success = True
         response.message = "exit"
+        self.get_logger().info("------------ self driving exit end ")
+
         return response
 
     def set_running_srv_callback(self, request, response):
@@ -249,47 +253,16 @@ class SelfDrivingNode(Node):
         self.get_logger().info(f"--- park_action:machine_type : {self.machine_type}")
         # 주차시작시 빨간불로 전환
         self.rgb_color_publish(0)
+        self.start = False
+        self.enter = False
 
-        if self.machine_type == 'MentorPi_Mecanum': 
-            twist = Twist()
-            twist.linear.y = -0.2
-            self.mecanum_pub.publish(twist)
-            time.sleep(0.38/0.2)
-        elif self.machine_type == 'MentorPi_Acker':
-            twist = Twist()
-            twist.linear.x = 0.15
-            twist.angular.z = twist.linear.x*math.tan(-0.5061)/0.145
-            self.mecanum_pub.publish(twist)
-            time.sleep(3)
+        twist = Twist()
+        twist.linear.y = -0.2
+        self.mecanum_pub.publish(twist)
+        time.sleep(0.38/0.2)
 
-            twist = Twist()
-            twist.linear.x = 0.15
-            twist.angular.z = -twist.linear.x*math.tan(-0.5061)/0.145
-            self.mecanum_pub.publish(twist)
-            time.sleep(2)
-
-            twist = Twist()
-            twist.linear.x = -0.15
-            twist.angular.z = twist.linear.x*math.tan(-0.5061)/0.145
-            self.mecanum_pub.publish(twist)
-            time.sleep(1.5)
-
-        else:
-            twist = Twist()
-            twist.angular.z = -1
-            self.mecanum_pub.publish(twist)
-            time.sleep(1.5)
-            self.mecanum_pub.publish(Twist())
-            twist = Twist()
-            twist.linear.x = 0.2
-            self.mecanum_pub.publish(twist)
-            time.sleep(0.65/0.2)
-            self.mecanum_pub.publish(Twist())
-            twist = Twist()
-            twist.angular.z = 1
-            self.mecanum_pub.publish(twist)
-            time.sleep(1.5)
         self.mecanum_pub.publish(Twist())
+        self.exit_srv_callback(Trigger.Request(), Trigger.Response()) 
 
     def main(self):
         self.get_logger().info('\033[1;32m -0- %s\033[0m' % self.machine_type)
@@ -357,22 +330,21 @@ class SelfDrivingNode(Node):
                     twist.linear.x = self.normal_speed  # go straight with normal speed
 
                 #주차 표지판 인식.
+                #우회전 후 파크표지판 인식시.
                 # If the robot detects a stop sign and a crosswalk, it will slow down to ensure stable recognition
-                if 0 < self.park_x and 135 < self.crosswalk_distance:
+                if 0 < self.park_x and self.turn_right_start and not self.turn_right:
                     twist.linear.x = self.slow_down_speed
-                    if not self.start_park and 180 < self.crosswalk_distance:  # When the robot is close enough to the crosswalk, it will start parking
-                        self.count_park += 1  
-                        self.park_x = -1 # park 표지판 초기화
-                        self.get_logger().info(f"--- close park crosswalk_distance : {self.crosswalk_distance} , count_park : {self.count_park}")
-                        if self.count_park >= 15:  
-                            self.mecanum_pub.publish(Twist())  
-                            self.start_park = True
-                            self.stop = True
-                            self.get_logger().info(f"--- start park : {self.count_park}")
-                            threading.Thread(target=self.park_action).start()
-                    else:
-                        self.count_park = 0  
-                
+                    twist = Twist()
+                    twist.linear.x = self.slow_down_speed  # 직진 속도 설정
+                    self.mecanum_pub.publish(twist)  # 모터에 명령 전송
+                    time.sleep(3)  # 3초 동안 대기
+                    self.mecanum_pub.publish(Twist())  
+                    self.stop = True
+                    self.get_logger().info(f"--- start park : {self.count_park}")
+                    #threading.Thread(target=self.park_action).start()
+                    threading.Thread(target=self.park_action).start()
+                    
+
                 # 차선 추적 및 PID 제어
                 # 차선 중심 좌표(lane_x)가 감지되고 정지 상태가 아니면
                 # 차선이 오른쪽으로 치우쳐 있으면(150 이상) 우회전 동작을 시작.
@@ -385,23 +357,23 @@ class SelfDrivingNode(Node):
                 #self.get_logger().info('\033[1;33m lane_x :  %s , turn_right : %s //// %s \033[0m ' % (lane_x, self.turn_right, self.turn_right_distance))
                 
                 if not self.stop:  
-                    #if time.time() - self.start_turn_time_stamp > 2 and self.turn_right:
-                    #    self.turn_right_distance = -1
-                    #    self.turn_right = False
-                    #    self.start_turn = True
-                    #    self.get_logger().info("Right start End")
-                    if self.turn_right and (self.start_turn_time_stamp <= 0):
-                        self.start_turn_time_stamp = time.time()
+                    # self.turn_right : 표지판 인식.
+                    # self.turn_right_start : 우회전 시작.
+                    # self.turn_right_distance : 마지막 우회전 표지판의 거리(y좌표)
+                    # 하단 조건에서 우회전 종료시에도 self.turn_right_start를 false로 변경하지 않은 이유는
+                    # 우회전 표시 후 바로 직진-주차가 되기때문이다.
+
+                    if not self.turn_right_start and self.turn_right and self.turn_right_distance < 80:
+                        self.turn_right_start = True
+                        self.start_turn_time_stamp = time.monotonic() * 1000
                         twist.angular.z =  twist.linear.x * math.tan(-0.5061) / 0.145 #-0.45  # turning speed
-                        self.get_logger().info("Right start")
-                    elif self.turn_right and time.time() - self.start_turn_time_stamp > 2:
-                    #    self.turn_right_time_stamp = time.time()
+                        self.get_logger().info("Right start")                        
+                    elif self.turn_right_start and self.turn_right and (time.monotonic() * 1000) - self.start_turn_time_stamp > 2000:
                         self.turn_right_distance = -1
                         self.turn_right = False
                         self.start_turn_time_stamp = 0
                         self.get_logger().info("Right End")
-                        twist.angular.z = twist.linear.x * math.tan(common.set_range(self.pid.output, -0.1, 0.1)) / 0.145
-                    elif self.turn_right:
+                    elif self.turn_right_start and self.turn_right and (time.monotonic() * 1000) - self.start_turn_time_stamp <= 2000:
                         twist.angular.z =  twist.linear.x * math.tan(-0.5061) / 0.145 #-0.45  # turning speed
                         self.get_logger().info("Right ing")
                     elif lane_x > 150:  
@@ -454,7 +426,7 @@ class SelfDrivingNode(Node):
             
             bgr_image = cv2.cvtColor(result_image, cv2.COLOR_RGB2BGR)
             # self.display가 True일 때만 FPS 표시 등 디스플레이 관련 처리를 합니다
-            if self.display:
+            if True:
                 self.fps.update()
                 #초당 FPS계산 및 오버레이.
                 bgr_image = self.fps.show_fps(bgr_image)
@@ -464,7 +436,7 @@ class SelfDrivingNode(Node):
             
             #한 루프가 0.03초(약 33FPS)보다 빨리 끝났으면 남은 시간만큼 대기합니다.
             latency = time.time() - time_start
-            time_d = 0.03 - latency
+            time_d = 0.05 - latency
             #일정한 주기로 루프가 돌도록 보장합니다.
             if time_d > 0:
                 time.sleep(time_d)
@@ -481,31 +453,46 @@ class SelfDrivingNode(Node):
             self.crosswalk_distance = 0
         else:
             min_distance = 0
+            corsswalk_cnt = 0
+
+            object_counts = {class_name: 0 for class_name in self.classes}
+
+
             for i in self.objects_info:
                 class_name = i.class_name
                 center = (int((i.box[0] + i.box[2])/2), int((i.box[1] + i.box[3])/2))
-                
+                    
+                # 객체 카운트 증가
+                object_counts[class_name] += 1
+
                 if class_name == 'crosswalk':  
+                    corsswalk_cnt += 1
                     if center[1] > min_distance:  # Obtain recent y-axis pixel coordinate of the crosswalk
                         min_distance = center[1]
                 elif class_name == 'right':  # obtain the right turning sign
                     self.count_right += 1
-                    self.count_right_miss = 0
-                    if self.count_right >= 4:  # If it is detected multiple times, take the right turning sign to true
-                        self.turn_right = True
+                    self.turn_right_distance = center[1]
+                    self.get_logger().info('\033[1;35m%s , %s , %s\033[0m' % ("is Right", self.count_right, self.turn_right_distance))
+                    
+                    if self.count_right >= 2:  # If it is detected multiple times, take the right turning sign to true
                         self.count_right = 0
-                        self.get_logger().info("is Right")
-
-                    if center[1] > self.turn_right_distance:
-                        self.turn_right_distance = center[1]
+                        self.turn_right = True
 
                 elif class_name == 'park':  # obtain the center coordinate of the parking sign
-                    self.park_x = center[0]
+                    self.park_count += 1
+                    if self.park_count >= 5:
+                        self.park_x = center[0]
+                        self.park_count = 0
+                    
                 elif class_name == 'red' or class_name == 'green':  # obtain the status of the traffic light
                     self.traffic_signs_status = i
                
 
-            self.get_logger().info('\033[1;32m%s\033[0m' % class_name)
+            # 객체 발견 요약 문자열 생성
+            objects_summary = ", ".join([f"{name}:{count}" for name, count in object_counts.items() if count > 0])
+            
+            # 상세 로그 출력
+            self.get_logger().info('\033[1;32m %s, distance: %d , len : %d \033[0m' % (objects_summary, min_distance, len(self.objects_info)))
             self.crosswalk_distance = min_distance
 
 def main():
@@ -517,5 +504,3 @@ def main():
  
 if __name__ == "__main__":
     main()
-
-    
