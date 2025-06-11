@@ -363,10 +363,10 @@ class SelfDrivingNode(Node):
                     # 하단 조건에서 우회전 종료시에도 self.turn_right_start를 false로 변경하지 않은 이유는
                     # 우회전 표시 후 바로 직진-주차가 되기때문이다.
 
-                    if not self.turn_right_start and self.turn_right and self.turn_right_distance < 80:
+                    if not self.turn_right_start and self.turn_right:
                         self.turn_right_start = True
                         self.start_turn_time_stamp = time.monotonic() * 1000
-                        twist.angular.z =  twist.linear.x * math.tan(-0.5061) / 0.145 #-0.45  # turning speed
+                        twist.angular.z =  twist.linear.x * math.tan(-0.6061) / 0.145 #-0.45  # turning speed
                         self.get_logger().info("Right start")                        
                     elif self.turn_right_start and self.turn_right and (time.monotonic() * 1000) - self.start_turn_time_stamp > 2000:
                         self.turn_right_distance = -1
@@ -374,16 +374,16 @@ class SelfDrivingNode(Node):
                         self.start_turn_time_stamp = 0
                         self.get_logger().info("Right End")
                     elif self.turn_right_start and self.turn_right and (time.monotonic() * 1000) - self.start_turn_time_stamp <= 2000:
-                        twist.angular.z =  twist.linear.x * math.tan(-0.5061) / 0.145 #-0.45  # turning speed
+                        twist.angular.z =  twist.linear.x * math.tan(-0.6061) / 0.145 #-0.45  # turning speed
                         self.get_logger().info("Right ing")
-                    elif lane_x > 150:  
+                    elif lane_x > 130:  
                         self.count_turn += 1
                         if self.count_turn > 5 and not self.start_turn:
                             self.start_turn = True
                             self.count_turn = 0
                             self.start_turn_time_stamp = time.time()
                         if self.machine_type != 'MentorPi_Acker':
-                            twist.angular.z =  twist.linear.x * math.tan(-0.5061) / 0.145 #-0.45  # turning speed
+                            twist.angular.z =  twist.linear.x * math.tan(-0.6061) / 0.145 #-0.45  # turning speed
                         else:
                             twist.angular.z = twist.linear.x * math.tan(-0.5061) / 0.145
                     else:  # use PID algorithm to correct turns on a straight road
@@ -474,11 +474,13 @@ class SelfDrivingNode(Node):
                     self.turn_right_distance = center[1]
                     self.get_logger().info('\033[1;35m%s , %s , %s\033[0m' % ("is Right", self.count_right, self.turn_right_distance))
                     
-                    if self.count_right >= 2:  # If it is detected multiple times, take the right turning sign to true
+                    if self.count_right >= 4:  # If it is detected multiple times, take the right turning sign to true
                         self.count_right = 0
                         self.turn_right = True
 
                 elif class_name == 'park':  # obtain the center coordinate of the parking sign
+                    self.get_logger().info(f"=========== finded park : {self.count_park}")
+
                     self.park_count += 1
                     if self.park_count >= 5:
                         self.park_x = center[0]
@@ -492,7 +494,7 @@ class SelfDrivingNode(Node):
             objects_summary = ", ".join([f"{name}:{count}" for name, count in object_counts.items() if count > 0])
             
             # 상세 로그 출력
-            self.get_logger().info('\033[1;32m %s, distance: %d , len : %d \033[0m' % (objects_summary, min_distance, len(self.objects_info)))
+            #self.get_logger().info('\033[1;32m %s, distance: %d , len : %d \033[0m' % (objects_summary, min_distance, len(self.objects_info)))
             self.crosswalk_distance = min_distance
 
 def main():
