@@ -76,7 +76,7 @@ class SelfDrivingNode(Node):
 
         self.timer = self.create_timer(0.0, self.init_process, callback_group=timer_cb_group)
         # rgb color red and green value tuple list saved
-        self.color_space = [(255,0,0), (0,255,0),(0,0,0)]
+        self.color_space = [(255,0,0), (0,255,0),(0,0,0), (0,0,255)]
 
     def button_callback(self, msg):
         self.get_logger().info(f"Button received: id={msg.id}, state={msg.state}")
@@ -96,6 +96,8 @@ class SelfDrivingNode(Node):
         rgb_index = 0 -> red
         rgb_index = 1 -> green
         rgb_index = 2 -> turn_off 
+        rgb_index = 2 -> blue 
+
         '''
         color_value = self.color_space[rgb_index]
         msg = RGBStates()
@@ -303,30 +305,33 @@ class SelfDrivingNode(Node):
 
                 twist = Twist()
 
+                crosswalk_area, park_area, turn_right_area = self.get_area()
+
+                #self.get_logger().info(f"1 : {self.stop} , {self.start_slow_down}")
+
                 # if detecting the zebra crossing, start to slow down
                 #self.get_logger().info('\033[1;33m -- %s\033[0m  / %s ' % (self.crosswalk_distance , latency))
                 #횡단 보도 감지 및 감속 
-                # 횡단보다와의 거리가 70픽셀 이상이고 아직 감속전이라면 3번 연속 감지시 감속 시작.
-                if 70 < self.crosswalk_distance and not self.start_slow_down:  # The robot starts to slow down only when it is close enough to the zebra crossing
-                    #반복시 감속 처리 확인
-                    self.count_crosswalk += 1
-                    if self.count_crosswalk == 3:  # judge multiple times to prevent false detection
-                        self.count_crosswalk = 0
-                        self.start_slow_down = True  # sign for slowing down
-                        self.count_slow_down = time.time()  # fixing time for slowing down
-                else:  # need to detect continuously, otherwise reset
-                    self.count_crosswalk = 0
+                if crosswalk_area > 1400 and not self.start_slow_down:  # The robot starts to slow down only when it is close enough to the zebra crossing
+                    self.start_slow_down = True  # sign for slowing down
+                    self.count_slow_down = time.time()  # fixing time for slowing down
+                    self.rgb_color_publish(3)
+                elif self.start_slow_down and time.time() - self.count_slow_down > 1:  # need to detect continuously, otherwise reset
+                    self.start_slow_down = False
+                    self.count_slow_down = 0
+                    self.rgb_color_publish(1)
                 
-                crosswalk_area, park_area, turn_right_area = self.get_area()
+                #self.get_logger().info(f"2 : {self.stop} , {self.start_slow_down}")
 
-                if crosswalk_area > 1700 and crosswalk_area < 3000 and cr_time <= 0:
+                if crosswalk_area > 1500 and crosswalk_area < 3000 and cr_time <= 0:
                     self.mecanum_pub.publish(Twist())
                     cr_time = time.time()
                     time.sleep(1)
                     self.get_logger().info(f"crosswalk stop")
-                elif time.time() - cr_time > 4:
+                elif time.time() - cr_time > 3:
                     cr_time =0 
                     
+                #self.get_logger().info(f"3 : {self.stop} , {self.start_slow_down}")
 
                 # 감속처리 및 신호등 인식
                 # 감속 플래그가 켜지면 신호등 상태를 확인합니다.
@@ -349,10 +354,13 @@ class SelfDrivingNode(Node):
                             self.rgb_color_publish(1)
                     if not self.stop:  # In other cases where the robot is not stopped, slow down the speed and calculate the time needed to pass through the crosswalk. The time needed is equal to the length of the crosswalk divided by the driving speed
                         twist.linear.x = self.slow_down_speed
-                        if time.time() - self.count_slow_down > self.crosswalk_length / twist.linear.x:
-                            self.start_slow_down = False
+                        #if time.time() - self.count_slow_down > self.crosswalk_length / twist.linear.x:
+                        #    self.start_slow_down = False
                 else:
                     twist.linear.x = self.normal_speed  # go straight with normal speed
+
+                #self.get_logger().info(f"4 : {self.stop} , {self.start_slow_down}")
+
 
                 #주차 표지판 인식.
                 # If the robot detects a stop sign and a crosswalk, it will slow down to ensure stable recognition
@@ -414,6 +422,8 @@ class SelfDrivingNode(Node):
                     self.mecanum_pub.publish(twist)  
                 else:
                     self.pid.clear()
+
+                #self.get_logger().info(f"5 : {self.stop} , {self.start_slow_down}")
 
                 #rqt로 볼때 화면에 인식 박스를 그려줌. 기본 실행시 오히려
                 #성능상 이점이 없으므로 False처리. 추후 argument로 받도록 변경
