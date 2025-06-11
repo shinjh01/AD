@@ -366,7 +366,7 @@ class SelfDrivingNode(Node):
                     if not self.turn_right_start and self.turn_right and self.turn_right_distance < 80:
                         self.turn_right_start = True
                         self.start_turn_time_stamp = time.monotonic() * 1000
-                        twist.angular.z =  twist.linear.x * math.tan(-0.5061) / 0.145 #-0.45  # turning speed
+                        twist.angular.z =  twist.linear.x * math.tan(-0.3061) / 0.145 #-0.45  # turning speed
                         self.get_logger().info("Right start")                        
                     elif self.turn_right_start and self.turn_right and (time.monotonic() * 1000) - self.start_turn_time_stamp > 2000:
                         self.turn_right_distance = -1
@@ -374,7 +374,7 @@ class SelfDrivingNode(Node):
                         self.start_turn_time_stamp = 0
                         self.get_logger().info("Right End")
                     elif self.turn_right_start and self.turn_right and (time.monotonic() * 1000) - self.start_turn_time_stamp <= 2000:
-                        twist.angular.z =  twist.linear.x * math.tan(-0.5061) / 0.145 #-0.45  # turning speed
+                        twist.angular.z =  twist.linear.x * math.tan(-0.3061) / 0.145 #-0.45  # turning speed
                         self.get_logger().info("Right ing")
                     elif lane_x > 150:  
                         self.count_turn += 1
@@ -383,7 +383,7 @@ class SelfDrivingNode(Node):
                             self.count_turn = 0
                             self.start_turn_time_stamp = time.time()
                         if self.machine_type != 'MentorPi_Acker':
-                            twist.angular.z =  twist.linear.x * math.tan(-0.5061) / 0.145 #-0.45  # turning speed
+                            twist.angular.z =  twist.linear.x * math.tan(-0.4061) / 0.145 #-0.45  # turning speed
                         else:
                             twist.angular.z = twist.linear.x * math.tan(-0.5061) / 0.145
                     else:  # use PID algorithm to correct turns on a straight road
@@ -479,6 +479,8 @@ class SelfDrivingNode(Node):
                         self.turn_right = True
 
                 elif class_name == 'park':  # obtain the center coordinate of the parking sign
+                    self.get_logger().info(f"=========== finded park : {self.count_park}")
+
                     self.park_count += 1
                     if self.park_count >= 5:
                         self.park_x = center[0]
