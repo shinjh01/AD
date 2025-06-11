@@ -89,7 +89,6 @@ class SelfDrivingNode(Node):
             self.get_logger().info("Button 2 pressed, stop self-driving")
             #self.is_running = False  # Start the self-driving process
             self.exit_srv_callback(Trigger.Request(), Trigger.Response())  # Call the reset motor position function
-            self.reset_motor_position()
     
     # 주어진 인자에 따라 RGBStates 토픽에 색변환 메세지를 보내는 함수 
     def rgb_color_publish(self, rgb_index):
@@ -104,20 +103,6 @@ class SelfDrivingNode(Node):
            RGBState(index=1, red=color_value[0], green=color_value[1], blue=color_value[2]) 
         ]
         self.rgb_publisher.publish(msg)
-
-    def reset_motor_position(self):
-        """
-        Reset the motor position to 0.
-        """
-        twist = Twist()
-        twist.linear.x = 0.0
-        twist.linear.y = 0.0
-        twist.linear.z = 0.0
-        twist.angular.x = 0.0
-        twist.angular.y = 0.0
-        twist.angular.z = 0.0
-        self.mecanum_pub.publish(twist)  # Publish the zeroed Twist message
-        self.get_logger().info("Motor position reset to 0")
 
     def init_process(self):
         self.timer.cancel()
@@ -222,9 +207,10 @@ class SelfDrivingNode(Node):
                     self.object_sub.unregister()
             except Exception as e:
                 self.get_logger().info('\033[1;32m%s\033[0m' % str(e))
+            #종료시 안멈추는 경우가 있어서 퍼블리셔 재생성.
+            self.mecanum_pub = self.create_publisher(Twist, '/controller/cmd_vel', 1)
             self.mecanum_pub.publish(Twist())
         self.param_init()
-        
         response.success = True
         response.message = "exit"
         return response
