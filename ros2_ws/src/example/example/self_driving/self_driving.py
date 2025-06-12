@@ -124,20 +124,24 @@ class SelfDrivingNode(Node):
         rgb_index = 1 -> green
         rgb_index = 2 -> turn_off 
         rgb_index = 3 -> blue 
+        '''        
 
-        '''
-        self.led_17_yellow.off()
-        self.led_22_red.off()
-        self.led_27_green.off()
-        
         if rgb_index == 3:
             self.led_17_yellow.on()
-
-        if rgb_index == 0:
+            self.led_22_red.off()
+            self.led_27_green.off()
+        elif rgb_index == 0:
             self.led_22_red.on()
-        
-        if rgb_index == 1:
+            self.led_17_yellow.off()
+            self.led_27_green.off()
+        elif rgb_index == 1:
             self.led_27_green.on()
+            self.led_17_yellow.off()
+            self.led_22_red.off()
+        elif rgb_index == 2:
+            self.led_27_green.off()
+            self.led_17_yellow.off()
+            self.led_22_red.off()
 
         color_value = self.color_space[rgb_index]
         msg = RGBStates()
@@ -421,7 +425,7 @@ class SelfDrivingNode(Node):
                 if self.traffic_signs_status is not None:
                     area = abs(self.traffic_signs_status.box[0] - self.traffic_signs_status.box[2]) * abs(self.traffic_signs_status.box[1] - self.traffic_signs_status.box[3])
                     if self.traffic_signs_status.class_name == 'red' and area > 200 and area < 1000:  # If the robot detects a red traffic light, it will stop
-                        self.mecanum_pub.publish(Twist())
+                        twist = Twist()
                         self.stop = True
                         # 신호등 빨간색 인지시 및 정지시에 빨간불로 전환
                         self.rgb_color_publish(0)
@@ -444,7 +448,6 @@ class SelfDrivingNode(Node):
                 if crosswalk_area > 2000 and park_area > 700:
                     twist = Twist()
                     twist.linear.x = self.slow_down_speed
-                    self.mecanum_pub.publish(Twist())  
                     self.stop = True
                     self.get_logger().info(f"--- start park ")
                     threading.Thread(target=self.park_action).start()
@@ -465,8 +468,8 @@ class SelfDrivingNode(Node):
                         self.is_turn_right_start = True
                         self.turn_right_time_stamp = time.monotonic() * 1000
                         twist.angular.z =  twist.linear.x * math.tan(-0.6061) / 0.145 #-0.45  # turning speed
-                    elif not self.is_turn_right_start:
-                        self.adjust_to_center(image, binary_image, twist)
+                    #elif not self.is_turn_right_start:
+                    #    self.adjust_to_center(image, binary_image, twist)
                     elif self.is_turn_right_start and (time.monotonic() * 1000) - self.turn_right_time_stamp > 2000:
                         self.turn_right_time_stamp = 0
                         self.is_turn_right_start = False
