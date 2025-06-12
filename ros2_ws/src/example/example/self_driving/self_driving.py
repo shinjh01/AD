@@ -356,7 +356,7 @@ class SelfDrivingNode(Node):
                 self.get_logger().info('\033[1;33m -- %s\033[0m  / %s ' % (self.crosswalk_distance , latency))
                 #횡단 보도 감지 및 감속 
                 # 횡단보다와의 거리가 70픽셀 이상이고 아직 감속전이라면 3번 연속 감지시 감속 시작.
-                if 70 < self.crosswalk_distance and not self.start_slow_down:  # The robot starts to slow down only when it is close enough to the zebra crossing
+                if  self.crosswalk_distance  < 70 and not self.start_slow_down:  # The robot starts to slow down only when it is close enough to the zebra crossing
                     #반복시 감속 처리 확인
                     self.count_crosswalk += 1
                     if self.count_crosswalk == 3:  # judge multiple times to prevent false detection
