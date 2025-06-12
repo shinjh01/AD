@@ -163,6 +163,8 @@ class SelfDrivingNode(Node):
             self.enter_srv_callback(Trigger.Request(), Trigger.Response())
             request = SetBool.Request()
             request.data = True
+            self.rgb_color_publish(0)
+
             #파라미터로 처리하는것이나 어차피 시작은 멈춘 상태여야하므로.
             #self.set_running_srv_callback(request, SetBool.Response())
 
