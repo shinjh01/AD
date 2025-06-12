@@ -312,16 +312,17 @@ class SelfDrivingNode(Node):
                 # if detecting the zebra crossing, start to slow down
                 #self.get_logger().info('\033[1;33m -- %s\033[0m  / %s ' % (self.crosswalk_distance , latency))
                 #횡단 보도 감지 및 감속 
-                if crosswalk_area > 1400 and not self.start_slow_down:  # The robot starts to slow down only when it is close enough to the zebra crossing
+                if crosswalk_area > 1600 and not self.start_slow_down:  # The robot starts to slow down only when it is close enough to the zebra crossing
                     self.start_slow_down = True  # sign for slowing down
-                    twist.linear.x = self.slow_down_speed
+                    #twist.linear.x = self.slow_down_speed
                     self.count_slow_down = time.time()  # fixing time for slowing down
                     self.rgb_color_publish(3)
-                elif self.start_slow_down and time.time() - self.count_slow_down > 1:  # need to detect continuously, otherwise reset
+                elif self.start_slow_down and time.time() - self.count_slow_down > 3:  # need to detect continuously, otherwise reset
                     self.start_slow_down = False
                     self.count_slow_down = 0
                     self.rgb_color_publish(1)
-                    twist.linear.x = self.normal_speed
+                    #twist.linear.x = self.normal_speed
+                    
                 
                 #self.get_logger().info(f"2 : {self.stop} , {self.start_slow_down}")
 
@@ -346,7 +347,7 @@ class SelfDrivingNode(Node):
                         # 신호등 빨간색 인지시 및 정지시에 빨간불로 전환
                         self.rgb_color_publish(0)
                     elif self.traffic_signs_status.class_name == 'green':  # If the traffic light is green, the robot will slow down and pass through
-                        twist.linear.x = self.slow_down_speed
+                        #twist.linear.x = self.slow_down_speed
                         #self.stop = False
                         # 신호등 초록색 인지시 및 출발시에 초록불로 전환
                         self.rgb_color_publish(1)
@@ -357,8 +358,16 @@ class SelfDrivingNode(Node):
 
                 #주차 표지판 인식.
                 # If the robot detects a stop sign and a crosswalk, it will slow down to ensure stable recognition
+                if park_area > 0:
+                    self.get_logger().info(f"--- park {park_area} , ca {crosswalk_area}")
+                
                 if crosswalk_area > 3000 and park_area > 900:
+                    twist = Twist()
                     twist.linear.x = self.slow_down_speed
+                    
+                    self.mecanum_pub.publish(Twist())  
+
+                    time.sleep(2)
                     twist = Twist()
                     self.mecanum_pub.publish(Twist())  
                     self.stop = True
@@ -450,7 +459,7 @@ class SelfDrivingNode(Node):
             
             #한 루프가 0.06초( 약 16FPS) 보다 빨리 끝났으면 남은 시간만큼 대기합니다.
             latency = time.time() - time_start
-            time_d = 0.06 - latency
+            time_d = 0.05 - latency
             #일정한 주기로 루프가 돌도록 보장합니다.
             if time_d > 0:
                 time.sleep(time_d)
