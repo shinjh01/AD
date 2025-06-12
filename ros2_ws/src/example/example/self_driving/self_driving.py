@@ -310,7 +310,7 @@ class SelfDrivingNode(Node):
                 #self.get_logger().info(f"1 : {self.stop} , {self.start_slow_down}")
 
                 # if detecting the zebra crossing, start to slow down
-                self.get_logger().info('\033[1;33m -- %s\033[0m  / %s ' % (self.crosswalk_area , self.start_slow_down))
+                self.get_logger().info('\033[1;33m -- %s\033[0m  / %s ' % (crosswalk_area , self.start_slow_down))
                 #횡단 보도 감지 및 감속 
                 if crosswalk_area > 1600 and not self.start_slow_down:  # The robot starts to slow down only when it is close enough to the zebra crossing
                     self.start_slow_down = True  # sign for slowing down
@@ -318,7 +318,7 @@ class SelfDrivingNode(Node):
                     self.count_slow_down = time.time()  # fixing time for slowing down
                     self.rgb_color_publish(3)
                     self.mecanum_pub.publish(twist)  
-                    self.get_logger().info('\033[1;33m -- %s\033[0m  / %s ' % (self.crosswalk_area , self.start_slow_down))
+                    self.get_logger().info('\033[1;33m -- %s\033[0m  / %s ' % (crosswalk_area , self.start_slow_down))
                     continue
                 elif self.start_slow_down and time.time() - self.count_slow_down > 3:  # need to detect continuously, otherwise reset
                     self.start_slow_down = False
@@ -326,7 +326,7 @@ class SelfDrivingNode(Node):
                     self.count_slow_down = 0
                     self.rgb_color_publish(1)
                     self.mecanum_pub.publish(twist)  
-                    self.get_logger().info('\033[1;33m -- %s\033[0m  / %s ' % (self.crosswalk_area , self.start_slow_down))
+                    self.get_logger().info('\033[1;33m -- %s\033[0m  / %s ' % (crosswalk_area , self.start_slow_down))
                     continue                    
                 
                 #self.get_logger().info(f"2 : {self.stop} , {self.start_slow_down}")
