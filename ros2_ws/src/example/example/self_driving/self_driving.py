@@ -38,6 +38,7 @@ class SelfDrivingNode(Node):
 
         self.fps = fps.FPS()  
         self.image_queue = queue.Queue(maxsize=2)
+        self.depth_image_queue = queue.Queue(maxsize=2)
         self.classes = ['go', 'right', 'park', 'red', 'green', 'crosswalk']
         self.display = True
         self.bridge = CvBridge()
@@ -98,7 +99,7 @@ class SelfDrivingNode(Node):
         twist.angular.z = 0.0
         self.mecanum_pub.publish(twist)  # Publish the zeroed Twist message
         self.get_logger().info("Motor position reset to 0")
-
+        
     def init_process(self):
         self.timer.cancel()
 
@@ -146,6 +147,9 @@ class SelfDrivingNode(Node):
         self.count_crosswalk = 0
         self.crosswalk_distance = 0  # distance to the zebra crossing
         self.crosswalk_length = 0.1 + 0.3  # the length of zebra crossing and the robot
+        self.valid_crosswalks = []  # 유효한 횡단보도 객체 저장 (1. 특정 거리 이내에 있는, 2. 가로 길이가 더 긴)
+        self.num_detected_crosswalks = 0  # 감지된 유효 횡단보도의 개수
+        self.closest_crosswalk_y = 0  # 가장 가까운 횡단보도의 y좌표
 
         self.start_slow_down = False  # slowing down sign
         self.normal_speed = 0.1  # normal driving speed
@@ -213,13 +217,13 @@ class SelfDrivingNode(Node):
         self.is_running = False
 
     def image_callback(self, ros_image):  # callback target checking
-        cv_image = self.bridge.imgmsg_to_cv2(ros_image, "rgb8")
-        rgb_image = np.array(cv_image, dtype=np.uint8)
+        cv_image = self.bridge.imgmsg_to_cv2(ros_image, "rgb8")    # ROS 이미지 메세지 -> OpenCV 형식
+        rgb_image = np.array(cv_image, dtype=np.uint8)             # OpenCV 이미지 객체를 넘파이 배열로 변환
         if self.image_queue.full():
             # if the queue is full, remove the oldest image
             self.image_queue.get()
         # put the image into the queue
-        self.image_queue.put(rgb_image)
+        self.image_queue.put(rgb_image)                            # 큐에 새 이미지 추가
     
     # parking processing
     def park_action(self):
@@ -273,6 +277,7 @@ class SelfDrivingNode(Node):
         while self.is_running:
             time_start = time.time()
             try:
+                # 큐에서 이미지 1장을 꺼냄.
                 image = self.image_queue.get(block=True, timeout=1)
             except queue.Empty:
                 if not self.is_running:
@@ -280,21 +285,22 @@ class SelfDrivingNode(Node):
                 else:
                     continue
 
-            result_image = image.copy()
+            result_image = image.copy()      # 원본 이미지 복사 (후속처리 중 원본손상을 막기 위해)
             if self.start:
                 h, w = image.shape[:2]
 
                 # obtain the binary image of the lane
+                # 차선 검출 이미지
                 binary_image = self.lane_detect.get_binary(image)
 
                 twist = Twist()
 
                 # if detecting the zebra crossing, start to slow down
                 self.get_logger().info('\033[1;33m -- %s\033[0m  / %s ' % (self.crosswalk_distance , latency))
-                #횡단 보도 감지 및 감속 
+                # 횡단 보도 감지 및 감속
                 # 횡단보다와의 거리가 70픽셀 이상이고 아직 감속전이라면 3번 연속 감지시 감속 시작.
                 if 70 < self.crosswalk_distance and not self.start_slow_down:  # The robot starts to slow down only when it is close enough to the zebra crossing
-                    #반복시 감속 처리 확인
+                    # 반복시 감속 처리 확인
                     self.count_crosswalk += 1
                     if self.count_crosswalk == 3:  # judge multiple times to prevent false detection
                         self.count_crosswalk = 0
@@ -325,7 +331,7 @@ class SelfDrivingNode(Node):
                 else:
                     twist.linear.x = self.normal_speed  # go straight with normal speed
 
-                #주차 표지판 인식.
+                # 주차 표지판 인식.
                 # If the robot detects a stop sign and a crosswalk, it will slow down to ensure stable recognition
                 if 0 < self.park_x and 135 < self.crosswalk_distance:
                     twist.linear.x = self.slow_down_speed
@@ -423,18 +429,33 @@ class SelfDrivingNode(Node):
     # Obtain the target detection result
     def get_object_callback(self, msg):
         self.objects_info = msg.objects
+        
+        self.closest_crosswalk_y = 0
+        self.valid_crosswalks = []
+        
+        
         if self.objects_info == []:  # If it is not recognized, reset the variable
             self.traffic_signs_status = None
             self.crosswalk_distance = 0
         else:
             min_distance = 0
+            
+            camera_height_pixel = h * 0.25  # 이 값보다 크면 로봇카의 인식 범위 내. 작으면 멀리있음. (y좌표)
+            valid_crosswalk_count_this_frame = 0
+                        
             for i in self.objects_info:
-                class_name = i.class_name
-                center = (int((i.box[0] + i.box[2])/2), int((i.box[1] + i.box[3])/2))
+                class_name = i.class_name  # 'go', 'right', 'park', 'red', 'green', 'crosswalk'
+                center = (int((i.box[0] + i.box[2])/2), int((i.box[1] + i.box[3])/2))  # center = (x, y)
+                center_y = int( ( i.box[1] + i.box[3] ) / 2 )
                 
-                if class_name == 'crosswalk':  
-                    if center[1] > min_distance:  # Obtain recent y-axis pixel coordinate of the crosswalk
-                        min_distance = center[1]
+                
+                if class_name == 'crosswalk':
+                    if center[1] > min_distance:  # 현재 횡단보도의 중심 y좌표(center[1]) > 0
+                        min_distance = center[1]  # min_distance는 가장 가까운 횡단보도의 중심 y좌표가 됨
+                        
+                        
+                        
+                        
                 elif class_name == 'right':  # obtain the right turning sign
                     self.count_right += 1
                     self.count_right_miss = 0
@@ -450,6 +471,7 @@ class SelfDrivingNode(Node):
             self.get_logger().info('\033[1;32m%s\033[0m' % class_name)
             self.crosswalk_distance = min_distance
 
+
 def main():
     node = SelfDrivingNode('self_driving')
     executor = MultiThreadedExecutor()
@@ -460,4 +482,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-    
