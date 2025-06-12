@@ -319,18 +319,13 @@ class SelfDrivingNode(Node):
                     self.rgb_color_publish(3)
                     twist.linear.x = self.slow_down_speed
                     self.mecanum_pub.publish(twist)
-                    continue
                 elif self.start_slow_down and time.time() - self.count_slow_down > 1:  # need to detect continuously, otherwise reset
                     self.start_slow_down = False
                     self.count_slow_down = 0
                     self.rgb_color_publish(1)
                     twist.linear.x = self.normal_speed
                     self.mecanum_pub.publish(twist)
-                    continue                
-                #self.get_logger().info(f"2 : {self.stop} , {self.start_slow_down}")
-
-                #횡단보다 멈춤
-                if crosswalk_area > 2000 and crosswalk_area < 3000 and cr_time <= 0:
+                elif crosswalk_area > 2000 and crosswalk_area < 3000 and cr_time <= 0:
                     self.mecanum_pub.publish(Twist())
                     cr_time = time.time()
                     time.sleep(1)
@@ -505,7 +500,7 @@ class SelfDrivingNode(Node):
             # 객체 발견 요약 문자열 생성
             objects_summary = ", ".join([f"{name}:{count}" for name, count in object_counts.items() if count > 0])
             # 상세 로그 출력
-            #self.get_logger().info('\033[1;32m %s, distance: %d , len : %d \033[0m' % (objects_summary, min_distance, len(self.objects_info)))
+            self.get_logger().info('\033[1;32m %s, distance: %d , len : %d \033[0m' % (objects_summary, min_distance, len(self.objects_info)))
             self.crosswalk_distance = min_distance
 
 def main():
