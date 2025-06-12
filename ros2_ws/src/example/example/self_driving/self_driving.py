@@ -277,7 +277,21 @@ class SelfDrivingNode(Node):
     def shutdown(self, signum, frame):  # press 'ctrl+c' to close the program
         # program종료 시 rgb신호를 (0,0,0)을 주어서 불빛이 꺼지도록 함 
         self.get_logger().info("Caught shutdown siganl, turn off RGB")
-        self.rgb_color_publish(2)
+    # ROS 토픽으로도 LED 끄기
+        try:
+            self.rgb_color_publish(2)
+            # 메시지 전송을 위한 짧은 대기
+            time.sleep(0.1)
+        except Exception as e:
+            self.get_logger().warn(f"RGB publish shutdown failed: {e}")
+        
+        # 모터 정지
+        try:
+            self.mecanum_pub.publish(Twist())
+            time.sleep(0.1)
+        except Exception as e:
+            self.get_logger().warn(f"Motor stop failed: {e}")
+        
         self.is_running = False
         rclpy.shutdown()
         sys.exit(0)
