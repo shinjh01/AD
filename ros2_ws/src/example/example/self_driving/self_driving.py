@@ -389,7 +389,7 @@ class SelfDrivingNode(Node):
                             self.rgb_color_publish(1)
 
                     else: # 신호등 없을 때
-                        time.sleep(2)
+                        time.sleep(self.crosswalk_detection_disable_time)
                         self.stop = False
                         twist.linear.x = self.normal_speed
                         self.is_stopped_at_crosswalk = False
