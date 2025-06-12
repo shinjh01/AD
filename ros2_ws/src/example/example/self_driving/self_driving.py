@@ -194,7 +194,7 @@ class SelfDrivingNode(Node):
         # 속도를 조절하는 인자 부분 
         # slow_down_speed는 어떤 대상을 인지할 때 자동 조정 0.5, 0.3 지정
         self.start_slow_down = False  # slowing down sign
-        self.normal_speed = 0.1  # normal driving speed
+        self.normal_speed = 0.3  # normal driving speed
         self.slow_down_speed = 0.1  # slowing down speed
 
         self.traffic_signs_status = None  # record the state of the traffic lights
@@ -362,6 +362,8 @@ class SelfDrivingNode(Node):
                     if self.count_crosswalk == 3:  # judge multiple times to prevent false detection
                         self.count_crosswalk = 0
                         self.start_slow_down = True  # sign for slowing down
+                        # speed goes to slow
+                        self.get_logger().info("speed convert to slow")
                         self.count_slow_down = time.time()  # fixing time for slowing down
                 else:  # need to detect continuously, otherwise reset
                     self.count_crosswalk = 0
@@ -375,9 +377,9 @@ class SelfDrivingNode(Node):
                 if self.start_slow_down:
                     if self.traffic_signs_status is not None:
                         area = abs(self.traffic_signs_status.box[0] - self.traffic_signs_status.box[2]) * abs(self.traffic_signs_status.box[1] - self.traffic_signs_status.box[3])
-                        self.geat_logger().info(f"area of traffic light {self.traffic_signs_status.class_name} is {area}")
                         if self.traffic_signs_status.class_name == 'red' and area < 1000:  # If the robot detects a red traffic light, it will stop
                             self.mecanum_pub.publish(Twist())
+                            self.get_logger().info("stops at slow downa and red light")
                             self.stop = True
                             # 신호등 빨간색 인지시 및 정지시에 빨간불로 전환
                             self.rgb_color_publish(1,0)
@@ -390,6 +392,8 @@ class SelfDrivingNode(Node):
                         twist.linear.x = self.slow_down_speed
                         if time.time() - self.count_slow_down > self.crosswalk_length / twist.linear.x:
                             self.start_slow_down = False
+                            # speed goes to normal 
+                            self.get_logger().info("speed gets high")
                 else:
                     twist.linear.x = self.normal_speed  # go straight with normal speed
 
@@ -448,6 +452,11 @@ class SelfDrivingNode(Node):
                     self.mecanum_pub.publish(twist)  
                 else:
                     self.pid.clear()
+                
+                # detect speed type and log
+                speed_val = "fast" if not self.start_slow_down else "slow" 
+                # detect speed type and log
+                self.get_logger().info(f"my speed is now {speed_val}")
 
                 #rqt로 볼때 화면에 인식 박스를 그려줌. 기본 실행시 오히려
                 #성능상 이점이 없으므로 False처리. 추후 argument로 받도록 변경
@@ -508,7 +517,6 @@ class SelfDrivingNode(Node):
                 elif class_name == 'right':  # obtain the right turning sign
                     self.count_right += 1
                     self.count_right_miss = 0
-                    self.led_publisher()
                     if self.count_right >= 5:  # If it is detected multiple times, take the right turning sign to true
                         self.turn_right = True
                         self.count_right = 0
