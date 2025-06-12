@@ -100,64 +100,24 @@ graph TD
     class SD,YOLO,CV,GPIO_SW app
 ```
 
-
-##  UML 다이어그램
+## 유즈케이스 다이어그램
 
 ```mermaid
-classDiagram
-
-    %% SelfDrivingNode 클래스
-    class SelfDrivingNode {
-        +gpiozero.Button
-        +gpiozero.LED
-        +yolov5_ros2.object_detect (Subscribe)
-        +ascamera.camera_publisher.rgb0.image (Subscribe)
-        +lane_detect.get_binary()
-        +mecanum_pub (Publish)
-        +rgb_color_publish (Publish)
-        +park_action()
-        +adjust_to_center()
-    }
-
-    %% YOLOv5 노드
-    class YOLOv5 {
-        +Object Detection
-        +Traffic Light Recognition
-        +Crosswalk Detection
-        +Parking Sign Detection
-    }
-
-    %% Depth Camera 노드
-    class DepthCamera {
-        +Image Streaming
-        +Camera Info
-    }
-
-    %% Lane Detection 모듈
-    class LaneDetect {
-        +get_binary(image)
-        +Detect Lane Center
-    }
-
-    %% GPIOZero 라이브러리
-    class GPIOZero {
-        +Button Input
-        +LED Output
-    }
-
-    %% Mecanum Wheels
-    class Mecanum {
-        +Motor Control
-    }
-
-    %% 관계 정의
-    SelfDrivingNode --> YOLOv5 : Subscribes
-    SelfDrivingNode --> DepthCamera : Subscribes
-    SelfDrivingNode --> LaneDetect : Uses
-    SelfDrivingNode --> GPIOZero : Uses
-    SelfDrivingNode --> Mecanum : Publishes
-    SelfDrivingNode --> GPIOZero : Publishes/Subscribes LED States
+graph TD
+    %% 액터 정의
+    User[사용자] --> Start[Start_Self-Driving]
+    User --> Stop[Stop_Self-Driving]
+    Start --> ObjectDetection[Object_Detection]
+    Start --> LineDetection[Line_Detection]
+    Start --> LEDControlStart[Control_LEDs_Start]
+    ObjectDetection --> LEDControl[Control_LEDs]
+    ObjectDetection --> MecanumControl[Control_Mecanum_Wheels]
+    LineDetection --> LEDControl
+    LineDetection --> MecanumControl
+    Stop --> LEDControlStop[Control_LEDs_Stop]
+    Stop --> MecanumStop[Stop_Mecanum_Wheels]
 ```
+
 ##  시퀀스 다이어그램
 
 ```mermaid
