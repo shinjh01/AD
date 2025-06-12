@@ -335,14 +335,15 @@ class SelfDrivingNode(Node):
                 binary_image = self.lane_detect.get_binary(image)
 
                 twist = Twist()
-                
+                self.get_logger().info(f"========={self.crosswalk_distance} < {self.crosswalk_stop_threshold}==========")
                 if self.enable_crosswalk_detection and self.crosswalk_distance < self.crosswalk_stop_threshold:
+                    
                     self.mecanum_pub.publish(Twist())
                     self.stop = True
                     self.is_stopped_at_crosswalk = True
                     self.enable_crosswalk_detection = False
-                else:
-                    self.get_logger().info(f"=========too long distance==========")
+                    self.get_logger().info(f"=========stop!!!!!!!!!!!!==========")
+
                         
                 
                 
@@ -514,7 +515,7 @@ class SelfDrivingNode(Node):
                 elif class_name == 'red' or class_name == 'green':  # obtain the status of the traffic light
                     self.traffic_signs_status = i
 
-                self.get_logger().info(f"========={i.class_name}==========")
+                self.get_logger().info(f"=========classname{i.class_name}==========")
                
 
             self.get_logger().info('\033[1;32m%s\033[0m' % class_name)
