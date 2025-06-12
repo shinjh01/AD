@@ -94,7 +94,7 @@ class SelfDrivingNode(Node):
             self.reset_motor_position()
     
     # 주어진 인자에 따라 RGBStates 토픽에 색변환 메세지를 보내는 함수 
-    def rgb_color_publish(self, rgb_index):
+    def rgb_color_publish(self, index,rgb_index):
         '''
         rgb_index = 0 -> red
         rgb_index = 1 -> green
@@ -104,28 +104,28 @@ class SelfDrivingNode(Node):
         color_value = self.color_space[rgb_index]
         msg = RGBStates()
         msg.states = [
-           RGBState(index=1, red=color_value[0], green=color_value[1], blue=color_value[2]) 
+           RGBState(index=index, red=color_value[0], green=color_value[1], blue=color_value[2]) 
         ]
         self.rgb_publisher.publish(msg)
 
-    def blink_yellow_times(self, times):
+    def blink_yellow_times(self, index,times):
         '''
         time입력에 따라
         0.2초 간격으로 yellow 불빛을 껏다 키게 해준다. 
         '''
         repeat = math.ceil(times/0.2)
         for i in range(repeat):
-            self.rgb_color_publish(3)
+            self.rgb_color_publish(index,3)
             time.sleep(0.1)
-            self.rgb_color_publish(2)
+            self.rgb_color_publish(index,2)
             time.sleep(0.1)
         
 
-    def thread_call_yellow_blink(self, times):
+    def thread_call_yellow_blink(self, index,times):
         '''
         스레드를 생생성하고 실행시킨다. 
         '''
-        thread_yellow_blinking = threading.Thread(target=self.blink_yellow_times,args=(times))
+        thread_yellow_blinking = threading.Thread(target=self.blink_yellow_times,args=(index,times))
         thread_yellow_blinking.start()
     
 
@@ -218,7 +218,7 @@ class SelfDrivingNode(Node):
     def enter_srv_callback(self, request, response):
         self.get_logger().info('\033[1;32m%s\033[0m' % "self driving enter")
         # 시작 button 클릭 시에 초록불로 전환
-        self.rgb_color_publish(1)
+        self.rgb_color_publish(1,1)
         with self.lock:
             self.start = False
             camera = 'depth_cam'#self.get_parameter('depth_camera_name').value
@@ -233,7 +233,7 @@ class SelfDrivingNode(Node):
     def exit_srv_callback(self, request, response):
         self.get_logger().info('\033[1;32m%s\033[0m' % "self driving exit")
         # 정지 button 클릭 시에 빨간불로 전환
-        self.rgb_color_publish(0)
+        self.rgb_color_publish(1,0)
         with self.lock:
             self.start = False
             self.enter = False
@@ -254,7 +254,7 @@ class SelfDrivingNode(Node):
     def set_running_srv_callback(self, request, response):
         self.get_logger().info('\033[1;32m%s\033[0m' % "set_running")
         # 달리기 시작시 초록불로 전환
-        self.rgb_color_publish(1)
+        self.rgb_color_publish(1,1)
         with self.lock:
             self.start = request.data
             if not self.start:
@@ -266,7 +266,7 @@ class SelfDrivingNode(Node):
     def shutdown(self, signum, frame):  # press 'ctrl+c' to close the program
         # program종료 시 rgb신호를 (0,0,0)을 주어서 불빛이 꺼지도록 함 
         self.get_logger().info("Caught shutdown siganl, turn off RGB")
-        self.rgb_color_publish(2)
+        self.rgb_color_publish(1,2)
         self.is_running = False
         rclpy.shutdown()
         sys.exit(0)
@@ -284,7 +284,7 @@ class SelfDrivingNode(Node):
     def park_action(self):
         self.get_logger().info(f"--- park_action:machine_type : {self.machine_type}")
         # 주차시작시 빨간불로 전환
-        self.rgb_color_publish(0)
+        self.rgb_color_publish(1,0)
 
         if self.machine_type == 'MentorPi_Mecanum': 
             twist = Twist()
@@ -330,7 +330,7 @@ class SelfDrivingNode(Node):
     def main(self):
         self.get_logger().info('\033[1;32m -0- %s\033[0m' % self.machine_type)
         # 프로그램 진입시 빨간불로 대기
-        self.rgb_color_publish(0)
+        self.rgb_color_publish(1,0)
 
         latency = 0
         while self.is_running:
@@ -379,12 +379,12 @@ class SelfDrivingNode(Node):
                             self.mecanum_pub.publish(Twist())
                             self.stop = True
                             # 신호등 빨간색 인지시 및 정지시에 빨간불로 전환
-                            self.rgb_color_publish(0)
+                            self.rgb_color_publish(1,0)
                         elif self.traffic_signs_status.class_name == 'green':  # If the traffic light is green, the robot will slow down and pass through
                             twist.linear.x = self.slow_down_speed
                             self.stop = False
                             # 신호등 초록색 인지시 및 출발시에 초록불로 전환
-                            self.rgb_color_publish(1)
+                            self.rgb_color_publish(1,1)
                     if not self.stop:  # In other cases where the robot is not stopped, slow down the speed and calculate the time needed to pass through the crosswalk. The time needed is equal to the length of the crosswalk divided by the driving speed
                         twist.linear.x = self.slow_down_speed
                         if time.time() - self.count_slow_down > self.crosswalk_length / twist.linear.x:
@@ -425,7 +425,7 @@ class SelfDrivingNode(Node):
                             self.start_turn = True
                             self.count_turn = 0
                             self.start_turn_time_stamp = time.time()
-                            self.thread_call_yellow_blink(3)
+                            self.thread_call_yellow_blink(2,3)
                         if self.machine_type != 'MentorPi_Acker':
                             twist.angular.z =  twist.linear.x * math.tan(-0.5061) / 0.145 #-0.45  # turning speed
                         else:
@@ -511,7 +511,7 @@ class SelfDrivingNode(Node):
                     if self.count_right >= 5:  # If it is detected multiple times, take the right turning sign to true
                         self.turn_right = True
                         self.count_right = 0
-                        self.thread_call_yellow_blink(3)
+                        self.thread_call_yellow_blink(2,3)
                 elif class_name == 'park':  # obtain the center coordinate of the parking sign
                     self.park_x = center[0]
                 elif class_name == 'red' or class_name == 'green':  # obtain the status of the traffic light
