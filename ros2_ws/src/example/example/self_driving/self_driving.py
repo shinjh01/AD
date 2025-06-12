@@ -29,7 +29,7 @@ from ros_robot_controller_msgs.msg import BuzzerState, SetPWMServoState, PWMServ
 # 프로그램 종료시의 상황을 통제하기 위한 라이브러리 추가 import
 import signal
 import sys
-
+from gpiozero import LED, Button
 class SelfDrivingNode(Node):
     def __init__(self, name):
         rclpy.init()
@@ -38,6 +38,18 @@ class SelfDrivingNode(Node):
         self.is_running = True
         self.pid = pid.PID(0.4, 0.0, 0.05)
         self.param_init()
+
+        #gpio
+        self.start_gpio_btn = Button(23, pull_up=True)
+        self.start_gpio_btn.when_pressed = self.gpio_start_press
+        
+        self.end_gpio_btn = Button(24, pull_up=True)
+        self.end_gpio_btn.when_pressed = self.gpio_end_press
+
+        self.led_17_yellow = LED(17)
+        self.led_22_green = LED(22)
+        self.led_27_red = LED(27)
+
 
         self.fps = fps.FPS()  
         self.image_queue = queue.Queue(maxsize=2)
@@ -78,6 +90,19 @@ class SelfDrivingNode(Node):
         # rgb color red and green value tuple list saved
         self.color_space = [(255,0,0), (0,255,0),(0,0,0), (0,0,255)]
 
+    def gpio_start_press(self):
+        msg = ButtonState()
+        msg.id = 1
+        msg.state = 1
+        self.button_callback(msg)
+    
+    def gpio_end_press(self):
+        msg = ButtonState()
+        msg.id = 2
+        msg.state = 1
+        self.button_callback(msg)
+
+
     def button_callback(self, msg):
         self.get_logger().info(f"Button received: id={msg.id}, state={msg.state}")
         if msg.id == 1 and msg.state == 1:  # Button 1 short press
@@ -96,9 +121,22 @@ class SelfDrivingNode(Node):
         rgb_index = 0 -> red
         rgb_index = 1 -> green
         rgb_index = 2 -> turn_off 
-        rgb_index = 2 -> blue 
+        rgb_index = 3 -> blue 
 
         '''
+        self.led_17_yellow.off()
+        self.led_27_red.off()
+        self.led_22_green.off()
+
+        if rgb_index == 3:
+            self.led_17_yellow.on()
+
+        if rgb_index == 0:
+            self.led_27_red.on()
+        
+        if rgb_index == 1:
+            self.led_22_green.on()
+
         color_value = self.color_space[rgb_index]
         msg = RGBStates()
         msg.states = [
