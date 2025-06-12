@@ -375,6 +375,7 @@ class SelfDrivingNode(Node):
                 if self.start_slow_down:
                     if self.traffic_signs_status is not None:
                         area = abs(self.traffic_signs_status.box[0] - self.traffic_signs_status.box[2]) * abs(self.traffic_signs_status.box[1] - self.traffic_signs_status.box[3])
+                        self.geat_logger().info(f"area of traffic light {self.traffic_signs_status.class_name} is {area}")
                         if self.traffic_signs_status.class_name == 'red' and area < 1000:  # If the robot detects a red traffic light, it will stop
                             self.mecanum_pub.publish(Twist())
                             self.stop = True
