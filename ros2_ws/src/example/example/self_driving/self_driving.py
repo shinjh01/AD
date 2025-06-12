@@ -171,6 +171,7 @@ class SelfDrivingNode(Node):
         self.is_stopped_at_crosswalk = False # 멈췄는지 여부
         self.enable_crosswalk_detection = True # 횡단보도 감지 가능 여부
         self.crosswalk_detection_disable_time = 5.0 # 감지 비활성화 시간
+        self.stop_time = 0.0 # 멈췄을 때의 시간
         
         
         # 속도를 조절하는 인자 부분 
@@ -333,20 +334,33 @@ class SelfDrivingNode(Node):
                 # obtain the binary image of the lane
                 # 차선 검출 이미지
                 binary_image = self.lane_detect.get_binary(image)
-
                 twist = Twist()
+
+
+                self.get_logger().info(f"=========enable:========={self.enable_crosswalk_detection}==========")
+                # 시간 처리
+                if self.enable_crosswalk_detection:
+                    if time.time() - self.stop_time > self.crosswalk_detection_disable_time: # 비활성화 시간 지났으면 활성화
+                        self.enable_crosswalk_detection = True
+                    else: # 아니면 비활성화
+                        if not self.is_stopped_at_crosswalk: # 주행 상태
+                            twist.linear.x = self.normal_speed
+                        continue # 정지 상태
+
+
                 self.get_logger().info(f"========={self.crosswalk_distance} < {self.crosswalk_stop_threshold}==========")
-                if self.enable_crosswalk_detection and self.crosswalk_distance < self.crosswalk_stop_threshold:
-                    
+                # 주행 중
+                if not self.is_stopped_at_crosswalk and self.crosswalk_distance < self.crosswalk_stop_threshold:
                     self.get_logger().info(f"=========stop!!!!!!!!!!!!==========")
+                    #self.stopped_time = time.time()
+
+                    self.start_slow_down = True
                     self.mecanum_pub.publish(twist)
                     self.stop = True
                     self.is_stopped_at_crosswalk = True
                     self.enable_crosswalk_detection = False
+                elif not self.enable_crosswalk_detection
 
-                        
-                
-                
 
                 """
                 # if detecting the zebra crossing, start to slow down
@@ -499,11 +513,9 @@ class SelfDrivingNode(Node):
                 class_name = i.class_name  # 'go', 'right', 'park', 'red', 'green', 'crosswalk'
                 center = (int((i.box[0] + i.box[2])/2), int((i.box[1] + i.box[3])/2))  # center = (x, y)
                 center_y = int((i.box[1] + i.box[3])/2)
-                
                 if class_name == 'crosswalk':
                     if center_y > min_distance:  # 현재 횡단보도의 중심 y좌표(center[1]) > 0
                         min_distance = center_y  # min_distance는 가장 가까운 횡단보도의 중심 y좌표가 됨
-                        
                 elif class_name == 'right':  # obtain the right turning sign
                     self.count_right += 1
                     self.count_right_miss = 0
@@ -515,12 +527,8 @@ class SelfDrivingNode(Node):
                 elif class_name == 'red' or class_name == 'green':  # obtain the status of the traffic light
                     self.traffic_signs_status = i
 
-                self.get_logger().info(f"=========classname{i.class_name}==========")
-               
-
             self.get_logger().info('\033[1;32m%s\033[0m' % class_name)
             self.crosswalk_distance = min_distance
-            self.get_logger().info(f"========={self.crosswalk_distance}==========")
 
 
 def main():
