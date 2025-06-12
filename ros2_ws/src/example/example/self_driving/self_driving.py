@@ -339,34 +339,31 @@ class SelfDrivingNode(Node):
                 # 신호등이 없거나 정지 상태가 아니면 감속 속도로 주행, 일정 시간이 지나면 감속 해제.
                 # 감속 조건이 아니면 정상 속도로 주행.
                 # deceleration processing
-                if self.start_slow_down:
-                    if self.traffic_signs_status is not None:
-                        area = abs(self.traffic_signs_status.box[0] - self.traffic_signs_status.box[2]) * abs(self.traffic_signs_status.box[1] - self.traffic_signs_status.box[3])
-                        if self.traffic_signs_status.class_name == 'red' and area < 1000:  # If the robot detects a red traffic light, it will stop
-                            self.mecanum_pub.publish(Twist())
-                            self.stop = True
-                            # 신호등 빨간색 인지시 및 정지시에 빨간불로 전환
-                            self.rgb_color_publish(0)
-                        elif self.traffic_signs_status.class_name == 'green':  # If the traffic light is green, the robot will slow down and pass through
-                            twist.linear.x = self.slow_down_speed
-                            self.stop = False
-                            # 신호등 초록색 인지시 및 출발시에 초록불로 전환
-                            self.rgb_color_publish(1)
-                    if not self.stop:  # In other cases where the robot is not stopped, slow down the speed and calculate the time needed to pass through the crosswalk. The time needed is equal to the length of the crosswalk divided by the driving speed
+                if self.traffic_signs_status is not None:
+                    area = abs(self.traffic_signs_status.box[0] - self.traffic_signs_status.box[2]) * abs(self.traffic_signs_status.box[1] - self.traffic_signs_status.box[3])
+                    if self.traffic_signs_status.class_name == 'red' and area > 1000:  # If the robot detects a red traffic light, it will stop
+                        self.mecanum_pub.publish(Twist())
+                        self.stop = True
+                        # 신호등 빨간색 인지시 및 정지시에 빨간불로 전환
+                        self.rgb_color_publish(0)
+                    elif self.traffic_signs_status.class_name == 'green':  # If the traffic light is green, the robot will slow down and pass through
                         twist.linear.x = self.slow_down_speed
-                        #if time.time() - self.count_slow_down > self.crosswalk_length / twist.linear.x:
-                        #    self.start_slow_down = False
-                else:
-                    twist.linear.x = self.normal_speed  # go straight with normal speed
+                        self.stop = False
+                        # 신호등 초록색 인지시 및 출발시에 초록불로 전환
+                        self.rgb_color_publish(1)
+                if not self.stop:  # In other cases where the robot is not stopped, slow down the speed and calculate the time needed to pass through the crosswalk. The time needed is equal to the length of the crosswalk divided by the driving speed
+                    twist.linear.x = self.slow_down_speed
+                    #if time.time() - self.count_slow_down > self.crosswalk_length / twist.linear.x:
+                    #    self.start_slow_down = False
 
                 #self.get_logger().info(f"4 : {self.stop} , {self.start_slow_down}")
 
 
                 #주차 표지판 인식.
                 # If the robot detects a stop sign and a crosswalk, it will slow down to ensure stable recognition
-                if crosswalk_area > 3000 and park_area > 900:
-                    twist.linear.x = self.slow_down_speed
+                if crosswalk_area > 2000 and park_area > 700:
                     twist = Twist()
+                    twist.linear.x = self.slow_down_speed
                     self.mecanum_pub.publish(Twist())  
                     self.stop = True
                     self.get_logger().info(f"--- start park ")
@@ -413,7 +410,7 @@ class SelfDrivingNode(Node):
                             self.pid.SetPoint = 130  # the coordinate of the line while the robot is in the middle of the lane
                             self.pid.update(lane_x)
                             if self.machine_type != 'MentorPi_Acker':
-                                twist.angular.z = common.set_range(self.pid.output, -0.1, 0.1)
+                                twist.angular.z = twist.linear.x * math.tan(common.set_range(self.pid.output, -0.1, 0.1)) / 0.145
                             else:
                                 twist.angular.z = twist.linear.x * math.tan(common.set_range(self.pid.output, -0.1, 0.1)) / 0.145
                         else:
