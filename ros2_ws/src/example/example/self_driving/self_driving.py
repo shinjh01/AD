@@ -310,7 +310,6 @@ class SelfDrivingNode(Node):
                 #self.get_logger().info(f"1 : {self.stop} , {self.start_slow_down}")
 
                 # if detecting the zebra crossing, start to slow down
-                self.get_logger().info('\033[1;33m -- %s\033[0m  / %s ' % (crosswalk_area , self.start_slow_down))
                 #횡단 보도 감지 및 감속 
                 if crosswalk_area > 1600 and not self.start_slow_down:  # The robot starts to slow down only when it is close enough to the zebra crossing
                     self.start_slow_down = True  # sign for slowing down
@@ -345,6 +344,7 @@ class SelfDrivingNode(Node):
                     
                 # 감속처리 및 신호등 인식
                 if self.traffic_signs_status is not None:
+                    self.get_logger().info('\033[1;33m self.traffic_signs_status %s\033[0m   ' % (self.traffic_signs_status ))
                     area = abs(self.traffic_signs_status.box[0] - self.traffic_signs_status.box[2]) * abs(self.traffic_signs_status.box[1] - self.traffic_signs_status.box[3])
                     if self.traffic_signs_status.class_name == 'red' and area < 1000:  # If the robot detects a red traffic light, it will stop
                         self.mecanum_pub.publish(Twist())
@@ -367,6 +367,7 @@ class SelfDrivingNode(Node):
                     self.get_logger().info(f"--- park {park_area} , ca {crosswalk_area}")
                 
                 if crosswalk_area > 3000 and park_area > 900:
+                    self.get_logger().info('\033[1;33m self.park_area %s\033[0m   ' % (park_area))
                     twist = Twist()
                     twist.linear.x = self.slow_down_speed
                     self.mecanum_pub.publish(Twist())  
