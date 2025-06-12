@@ -167,7 +167,7 @@ class SelfDrivingNode(Node):
         self.count_crosswalk = 0
         self.crosswalk_distance = 0  # distance to the zebra crossing
         self.crosswalk_length = 0.1 + 0.3  # the length of zebra crossing and the robot
-        self.crosswalk_stop_threshold = 100 # 멈출 거리 임계값
+        self.crosswalk_stop_threshold = 150 # 멈출 거리 임계값
         self.is_stopped_at_crosswalk = False # 멈췄는지 여부
         self.enable_crosswalk_detection = True # 횡단보도 감지 가능 여부
         self.crosswalk_detection_disable_time = 5.0 # 감지 비활성화 시간
@@ -340,6 +340,7 @@ class SelfDrivingNode(Node):
                     self.mecanum_pub.publish(Twist())
                     self.stop = True
                     self.is_stopped_at_crosswalk = True
+                    self.enable_crosswalk_detection = False
                 else:
                     self.get_logger().info(f"=========too long distance==========")
                         
