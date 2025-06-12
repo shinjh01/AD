@@ -130,8 +130,6 @@ class SelfDrivingNode(Node):
         self.led_22_red.off()
         self.led_27_green.off()
         
-        self.get_logger().info(f"Button click {rgb_index}")
-
         if rgb_index == 3:
             self.led_17_yellow.on()
 
