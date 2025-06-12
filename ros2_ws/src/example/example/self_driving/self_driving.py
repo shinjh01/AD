@@ -458,7 +458,7 @@ class SelfDrivingNode(Node):
             
             #한 루프가 0.06초( 약 16FPS) 보다 빨리 끝났으면 남은 시간만큼 대기합니다.
             latency = time.time() - time_start
-            time_d = 0.06 - latency
+            time_d = 0.05 - latency
             #일정한 주기로 루프가 돌도록 보장합니다.
             if time_d > 0:
                 time.sleep(time_d)
@@ -501,7 +501,7 @@ class SelfDrivingNode(Node):
             # 객체 발견 요약 문자열 생성
             objects_summary = ", ".join([f"{name}:{count}" for name, count in object_counts.items() if count > 0])
             # 상세 로그 출력
-            self.get_logger().info('\033[1;32m %s, distance: %d , len : %d \033[0m' % (objects_summary, min_distance, len(self.objects_info)))
+            #self.get_logger().info('\033[1;32m %s, distance: %d , len : %d \033[0m' % (objects_summary, min_distance, len(self.objects_info)))
             self.crosswalk_distance = min_distance
 
 def main():
