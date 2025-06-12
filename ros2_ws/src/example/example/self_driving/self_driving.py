@@ -78,7 +78,7 @@ class SelfDrivingNode(Node):
 
         self.timer = self.create_timer(0.0, self.init_process, callback_group=timer_cb_group)
         # rgb color red and green value tuple list saved
-        self.color_space = [(255,0,0), (0,255,0),(0,0,0)]
+        self.color_space = [(255,0,0), (0,255,0),(0,0,0),(255,255,0)]
 
     def button_callback(self, msg):
         self.get_logger().info(f"Button received: id={msg.id}, state={msg.state}")
@@ -99,6 +99,7 @@ class SelfDrivingNode(Node):
         rgb_index = 0 -> red
         rgb_index = 1 -> green
         rgb_index = 2 -> turn_off 
+        rgb_index = 3 -> yellow
         '''
         color_value = self.color_space[rgb_index]
         msg = RGBStates()
@@ -106,26 +107,27 @@ class SelfDrivingNode(Node):
            RGBState(index=1, red=color_value[0], green=color_value[1], blue=color_value[2]) 
         ]
         self.rgb_publisher.publish(msg)
-    
-    # p-07 우회전시 LED 점멸 및 노란색 RGB 표시 
-    def turn_right_signal_publish(self):
-        '''
-        ''' 
-        led_msg = LedState()
-        led_msg.id = 1
-        led_msg.on_time = 0.5
-        led_msg.off_time = 0.5
-        led_msg.repeat = 10
 
-        rgb_msg = RGBStates()
-        rgb_msg.states = [
-            RGBState(index=1, red=255, green=255, blue=0)
-        ]
+    def blink_yellow_times(self, times):
+        '''
+        time입력에 따라
+        0.2초 간격으로 yellow 불빛을 껏다 키게 해준다. 
+        '''
+        repeat = math.ceil(times/0.2)
+        for i in range(repeat):
+            self.rgb_color_publish(3)
+            time.sleep(0.1)
+            self.rgb_color_publish(2)
+            time.sleep(0.1)
         
-        self.rgb_publisher.publish(rgb_msg)
-        self.led_publisher.publish(led_msg)
-        self.get_logger().info("LED yellow blinking for turnning right")
-        
+
+    def thread_call_yellow_blink(self, times):
+        '''
+        스레드를 생생성하고 실행시킨다. 
+        '''
+        thread_yellow_blinking = threading.Thread(target=self.blink_yellow_times,args=(times))
+        thread_yellow_blinking.start()
+    
 
     def reset_motor_position(self):
         """
@@ -423,6 +425,7 @@ class SelfDrivingNode(Node):
                             self.start_turn = True
                             self.count_turn = 0
                             self.start_turn_time_stamp = time.time()
+                            self.thread_call_yellow_blink(3)
                         if self.machine_type != 'MentorPi_Acker':
                             twist.angular.z =  twist.linear.x * math.tan(-0.5061) / 0.145 #-0.45  # turning speed
                         else:
@@ -508,7 +511,7 @@ class SelfDrivingNode(Node):
                     if self.count_right >= 5:  # If it is detected multiple times, take the right turning sign to true
                         self.turn_right = True
                         self.count_right = 0
-                        self.rgb_publisher(1)
+                        self.thread_call_yellow_blink(3)
                 elif class_name == 'park':  # obtain the center coordinate of the parking sign
                     self.park_x = center[0]
                 elif class_name == 'red' or class_name == 'green':  # obtain the status of the traffic light
