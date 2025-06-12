@@ -338,11 +338,11 @@ class SelfDrivingNode(Node):
                 self.get_logger().info(f"========={self.crosswalk_distance} < {self.crosswalk_stop_threshold}==========")
                 if self.enable_crosswalk_detection and self.crosswalk_distance < self.crosswalk_stop_threshold:
                     
-                    self.mecanum_pub.publish(Twist())
+                    self.get_logger().info(f"=========stop!!!!!!!!!!!!==========")
+                    self.mecanum_pub.publish(twist)
                     self.stop = True
                     self.is_stopped_at_crosswalk = True
                     self.enable_crosswalk_detection = False
-                    self.get_logger().info(f"=========stop!!!!!!!!!!!!==========")
 
                         
                 
