@@ -100,7 +100,7 @@ graph TD
     class SD,YOLO,CV,GPIO_SW app
 ```
 
-## 유즈케이스 다이어그램
+## 플로우
 
 ```mermaid
 graph TD
