@@ -124,24 +124,20 @@ class SelfDrivingNode(Node):
         rgb_index = 1 -> green
         rgb_index = 2 -> turn_off 
         rgb_index = 3 -> blue 
-        '''        
 
+        '''
+        self.led_17_yellow.off()
+        self.led_22_red.off()
+        self.led_27_green.off()
+        
         if rgb_index == 3:
             self.led_17_yellow.on()
-            self.led_22_red.off()
-            self.led_27_green.off()
-        elif rgb_index == 0:
+
+        if rgb_index == 0:
             self.led_22_red.on()
-            self.led_17_yellow.off()
-            self.led_27_green.off()
-        elif rgb_index == 1:
+        
+        if rgb_index == 1:
             self.led_27_green.on()
-            self.led_17_yellow.off()
-            self.led_22_red.off()
-        elif rgb_index == 2:
-            self.led_27_green.off()
-            self.led_17_yellow.off()
-            self.led_22_red.off()
 
         color_value = self.color_space[rgb_index]
         msg = RGBStates()
@@ -163,8 +159,6 @@ class SelfDrivingNode(Node):
             self.enter_srv_callback(Trigger.Request(), Trigger.Response())
             request = SetBool.Request()
             request.data = True
-            self.rgb_color_publish(0)
-
             #파라미터로 처리하는것이나 어차피 시작은 멈춘 상태여야하므로.
             #self.set_running_srv_callback(request, SetBool.Response())
 
@@ -277,21 +271,7 @@ class SelfDrivingNode(Node):
     def shutdown(self, signum, frame):  # press 'ctrl+c' to close the program
         # program종료 시 rgb신호를 (0,0,0)을 주어서 불빛이 꺼지도록 함 
         self.get_logger().info("Caught shutdown siganl, turn off RGB")
-    # ROS 토픽으로도 LED 끄기
-        try:
-            self.rgb_color_publish(2)
-            # 메시지 전송을 위한 짧은 대기
-            time.sleep(0.1)
-        except Exception as e:
-            self.get_logger().warn(f"RGB publish shutdown failed: {e}")
-        
-        # 모터 정지
-        try:
-            self.mecanum_pub.publish(Twist())
-            time.sleep(0.1)
-        except Exception as e:
-            self.get_logger().warn(f"Motor stop failed: {e}")
-        
+        self.rgb_color_publish(2)
         self.is_running = False
         rclpy.shutdown()
         sys.exit(0)
@@ -305,7 +285,7 @@ class SelfDrivingNode(Node):
         # put the image into the queue
         self.image_queue.put(rgb_image)
     
-    # parking processing
+    # parking processinr
     def park_action(self):
         self.get_logger().info(f"--- park_action:machine_type : {self.machine_type}")
         self.start = False
@@ -339,10 +319,11 @@ class SelfDrivingNode(Node):
 
         return crosswalk_area, park_area, turn_right_area
     
+
     def adjust_to_center(self, image, binary_image, twist):
         """
         차선 중심 기준으로 차량을 도로 중앙에 정렬하도록 조정합니다.
-        - 좌우 노란색 차선의 길이 차이에 따라 angular.z를 조정합니다.
+        - 상단 y=1 라인에서 좌우 픽셀 수 차이에 따라 angular.z를 조정합니다.
         - 우회전 중일 경우 이 메서드는 동작하지 않습니다.
         """
         if self.is_turn_right_start:
@@ -351,30 +332,34 @@ class SelfDrivingNode(Node):
         h, w = image.shape[:2]
         center_x = w // 2
 
-        # 왼쪽/오른쪽 영역 지정
-        left_roi = binary_image[:, :center_x]
-        right_roi = binary_image[:, center_x:]
+        # 상단 1줄 기준으로 좌우 영역 픽셀 수 계산
+        row = binary_image[1]  # 상단 y=1 줄 기준
 
-        # 각 영역의 차선 픽셀 개수 측정
-        left_yellow_count = cv2.countNonZero(left_roi)
-        right_yellow_count = cv2.countNonZero(right_roi)
+        left_portion = row[:center_x]
+        right_portion = row[center_x:]
+
+        left_yellow_count = np.count_nonzero(left_portion)
+        right_yellow_count = np.count_nonzero(right_portion)
 
         diff = left_yellow_count - right_yellow_count
 
-        # 중심에서 벗어난 정도를 토대로 angular.z 보정값 계산
-        correction = common.set_range(diff / 5000.0, -0.1, 0.1)
+        # 중심각 보정값 계산 (atan2 사용)
+        correction = math.atan2(2 * diff, w)
 
-        # 회전값 반영 (Acker 타입은 따로 처리)
+        # 회전 조정
         if self.machine_type != 'MentorPi_Acker':
             twist.angular.z += correction
         else:
             twist.angular.z = twist.linear.x * math.tan(correction) / 0.145
 
         # 감속
-        twist.linear.x = self.slow_down_speed * 0.8  # 약간 더 감속하여 정밀하게 조정
+        twist.linear.x = self.slow_down_speed * 0.8
 
-        self.get_logger().info(f"[Center Adjust] Left: {left_yellow_count}, Right: {right_yellow_count}, Diff: {diff}, Corr: {correction:.3f}")
-
+        # 디버깅 로그 출력
+        self.get_logger().info(
+            f"[Center Adjust] Left: {left_yellow_count}, Right: {right_yellow_count}, "
+            f"Diff: {diff}, Corr: {correction:.4f} rad"
+        )
 
     def main(self):
         self.get_logger().info('\033[1;32m -0- %s\033[0m' % self.machine_type)
@@ -441,7 +426,7 @@ class SelfDrivingNode(Node):
                 if self.traffic_signs_status is not None:
                     area = abs(self.traffic_signs_status.box[0] - self.traffic_signs_status.box[2]) * abs(self.traffic_signs_status.box[1] - self.traffic_signs_status.box[3])
                     if self.traffic_signs_status.class_name == 'red' and area > 200 and area < 1000:  # If the robot detects a red traffic light, it will stop
-                        twist = Twist()
+                        self.mecanum_pub.publish(Twist())
                         self.stop = True
                         # 신호등 빨간색 인지시 및 정지시에 빨간불로 전환
                         self.rgb_color_publish(0)
@@ -464,6 +449,7 @@ class SelfDrivingNode(Node):
                 if crosswalk_area > 2000 and park_area > 700:
                     twist = Twist()
                     twist.linear.x = self.slow_down_speed
+                    self.mecanum_pub.publish(Twist())  
                     self.stop = True
                     self.get_logger().info(f"--- start park ")
                     threading.Thread(target=self.park_action).start()
@@ -484,8 +470,8 @@ class SelfDrivingNode(Node):
                         self.is_turn_right_start = True
                         self.turn_right_time_stamp = time.monotonic() * 1000
                         twist.angular.z =  twist.linear.x * math.tan(-0.6061) / 0.145 #-0.45  # turning speed
-                    #elif not self.is_turn_right_start:
-                    #    self.adjust_to_center(image, binary_image, twist)
+                    elif not self.is_turn_right_start:
+                        self.adjust_to_center(image, binary_image, twist)
                     elif self.is_turn_right_start and (time.monotonic() * 1000) - self.turn_right_time_stamp > 2000:
                         self.turn_right_time_stamp = 0
                         self.is_turn_right_start = False
