@@ -320,6 +320,43 @@ class SelfDrivingNode(Node):
         self.park_obj = None
 
         return crosswalk_area, park_area, turn_right_area
+    
+    def adjust_to_center(self, image, binary_image, twist):
+        """
+        차선 중심 기준으로 차량을 도로 중앙에 정렬하도록 조정합니다.
+        - 좌우 노란색 차선의 길이 차이에 따라 angular.z를 조정합니다.
+        - 우회전 중일 경우 이 메서드는 동작하지 않습니다.
+        """
+        if self.is_turn_right_start:
+            return  # 우회전 중이면 조향 조정 하지 않음
+
+        h, w = image.shape[:2]
+        center_x = w // 2
+
+        # 왼쪽/오른쪽 영역 지정
+        left_roi = binary_image[:, :center_x]
+        right_roi = binary_image[:, center_x:]
+
+        # 각 영역의 차선 픽셀 개수 측정
+        left_yellow_count = cv2.countNonZero(left_roi)
+        right_yellow_count = cv2.countNonZero(right_roi)
+
+        diff = left_yellow_count - right_yellow_count
+
+        # 중심에서 벗어난 정도를 토대로 angular.z 보정값 계산
+        correction = common.set_range(diff / 5000.0, -0.1, 0.1)
+
+        # 회전값 반영 (Acker 타입은 따로 처리)
+        if self.machine_type != 'MentorPi_Acker':
+            twist.angular.z += correction
+        else:
+            twist.angular.z = twist.linear.x * math.tan(correction) / 0.145
+
+        # 감속
+        twist.linear.x = self.slow_down_speed * 0.8  # 약간 더 감속하여 정밀하게 조정
+
+        self.get_logger().info(f"[Center Adjust] Left: {left_yellow_count}, Right: {right_yellow_count}, Diff: {diff}, Corr: {correction:.3f}")
+
 
     def main(self):
         self.get_logger().info('\033[1;32m -0- %s\033[0m' % self.machine_type)
@@ -430,6 +467,8 @@ class SelfDrivingNode(Node):
                         self.is_turn_right_start = True
                         self.turn_right_time_stamp = time.monotonic() * 1000
                         twist.angular.z =  twist.linear.x * math.tan(-0.6061) / 0.145 #-0.45  # turning speed
+                    elif not self.is_turn_right_start:
+                        self.adjust_to_center(image, binary_image, twist)
                     elif self.is_turn_right_start and (time.monotonic() * 1000) - self.turn_right_time_stamp > 2000:
                         self.turn_right_time_stamp = 0
                         self.is_turn_right_start = False
