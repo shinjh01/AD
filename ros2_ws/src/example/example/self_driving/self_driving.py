@@ -319,7 +319,9 @@ class SelfDrivingNode(Node):
                 elif self.start_slow_down and time.time() - self.count_slow_down > 1:  # need to detect continuously, otherwise reset
                     self.start_slow_down = False
                     self.count_slow_down = 0                
-                elif crosswalk_area > 2000 and crosswalk_area < 3000 and cr_time <= 0:
+                
+                
+                if crosswalk_area > 2000 and crosswalk_area < 3000 and cr_time <= 0:
                     self.mecanum_pub.publish(Twist())
                     cr_time = time.time()
                     time.sleep(1)
@@ -338,14 +340,11 @@ class SelfDrivingNode(Node):
                 #self.get_logger().info(f"3 : {self.stop} , {self.start_slow_down}")
 
                 # 감속처리 및 신호등 인식
-                # 감속 플래그가 켜지면 신호등 상태를 확인합니다.
-                # 빨간불이면 정지, 초록불이면 감속 후 통과.
-                # 신호등이 없거나 정지 상태가 아니면 감속 속도로 주행, 일정 시간이 지나면 감속 해제.
-                # 감속 조건이 아니면 정상 속도로 주행.
+
                 # deceleration processing
                 if self.traffic_signs_status is not None:
                     area = abs(self.traffic_signs_status.box[0] - self.traffic_signs_status.box[2]) * abs(self.traffic_signs_status.box[1] - self.traffic_signs_status.box[3])
-                    if self.traffic_signs_status.class_name == 'red' and area > 1000:  # If the robot detects a red traffic light, it will stop
+                    if self.traffic_signs_status.class_name == 'red' and area > 200 and area < 1000:  # If the robot detects a red traffic light, it will stop
                         self.mecanum_pub.publish(Twist())
                         self.stop = True
                         # 신호등 빨간색 인지시 및 정지시에 빨간불로 전환
