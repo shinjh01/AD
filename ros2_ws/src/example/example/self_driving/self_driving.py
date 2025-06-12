@@ -127,17 +127,19 @@ class SelfDrivingNode(Node):
 
         '''
         self.led_17_yellow.off()
-        self.led_27_green.off()
         self.led_22_red.off()
+        self.led_27_green.off()
+        
+        self.get_logger().info(f"Button click {rgb_index}")
 
         if rgb_index == 3:
             self.led_17_yellow.on()
 
         if rgb_index == 0:
-            self.led_27_green.on()
+            self.led_22_red.on()
         
         if rgb_index == 1:
-            self.led_22_red.on()
+            self.led_27_green.on()
 
         color_value = self.color_space[rgb_index]
         msg = RGBStates()
