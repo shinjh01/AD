@@ -170,7 +170,7 @@ class SelfDrivingNode(Node):
         self.crosswalk_stop_threshold = 150 # 멈출 거리 임계값
         self.is_stopped_at_crosswalk = False # 멈췄는지 여부
         self.enable_crosswalk_detection = True # 횡단보도 감지 가능 여부
-        self.crosswalk_detection_disable_time = 5.0 # 감지 비활성화 시간
+        self.crosswalk_detection_disable_time = 3.0 # 감지 비활성화 시간
         self.stop_time = 0.0 # 멈췄을 때의 시간
         
         
@@ -337,7 +337,7 @@ class SelfDrivingNode(Node):
                 twist = Twist()
 
 
-                self.get_logger().info(f"=========enable:========={self.enable_crosswalk_detection}==========")
+                
                 # 시간 처리
                 if self.enable_crosswalk_detection:
                     if time.time() - self.stop_time > self.crosswalk_detection_disable_time: # 비활성화 시간 지났으면 활성화
@@ -357,6 +357,8 @@ class SelfDrivingNode(Node):
                     self.stop = True
                     self.is_stopped_at_crosswalk = True
                     self.enable_crosswalk_detection = False
+                else:
+                    self.get_logger().info(f"=========enable:========={self.enable_crosswalk_detection}==========")
 
 
                 """
