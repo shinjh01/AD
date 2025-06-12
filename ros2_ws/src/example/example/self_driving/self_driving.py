@@ -47,8 +47,8 @@ class SelfDrivingNode(Node):
         self.end_gpio_btn.when_pressed = self.gpio_end_press
 
         self.led_17_yellow = LED(17)
-        self.led_22_green = LED(22)
-        self.led_27_red = LED(27)
+        self.led_22_red = LED(22)
+        self.led_27_green = LED(27)
 
 
         self.fps = fps.FPS()  
@@ -127,17 +127,17 @@ class SelfDrivingNode(Node):
 
         '''
         self.led_17_yellow.off()
-        self.led_27_red.off()
-        self.led_22_green.off()
+        self.led_27_green.off()
+        self.led_22_red.off()
 
         if rgb_index == 3:
             self.led_17_yellow.on()
 
         if rgb_index == 0:
-            self.led_27_red.on()
+            self.led_27_green.on()
         
         if rgb_index == 1:
-            self.led_22_green.on()
+            self.led_22_red.on()
 
         color_value = self.color_space[rgb_index]
         msg = RGBStates()
