@@ -89,6 +89,8 @@ class SelfDrivingNode(Node):
         self.timer = self.create_timer(0.0, self.init_process, callback_group=timer_cb_group)
         # rgb color red and green value tuple list saved
         self.color_space = [(255,0,0), (0,255,0),(0,0,0), (0,0,255)]
+        #init 시에 빨간불
+        self.rgb_color_publish(0)
 
     def gpio_start_press(self):
         msg = ButtonState()
@@ -257,7 +259,7 @@ class SelfDrivingNode(Node):
     def set_running_srv_callback(self, request, response):
         self.get_logger().info('\033[1;32m%s\033[0m' % "set_running")
         # 달리기 시작시 초록불로 전환
-        self.rgb_color_publish(1)
+        #self.rgb_color_publish(1)
         with self.lock:
             self.start = request.data
             if not self.start:
@@ -286,8 +288,6 @@ class SelfDrivingNode(Node):
     # parking processing
     def park_action(self):
         self.get_logger().info(f"--- park_action:machine_type : {self.machine_type}")
-        # 주차시작시 빨간불로 전환
-        self.rgb_color_publish(0)
         self.start = False
         self.enter = False
 
@@ -298,6 +298,7 @@ class SelfDrivingNode(Node):
 
         self.mecanum_pub.publish(Twist())
         self.exit_srv_callback(Trigger.Request(), Trigger.Response()) 
+        self.rgb_color_publish(2)
 
     def calc_object_area(self, obj): 
         if obj == None:
@@ -321,7 +322,6 @@ class SelfDrivingNode(Node):
     def main(self):
         self.get_logger().info('\033[1;32m -0- %s\033[0m' % self.machine_type)
         # 프로그램 진입시 빨간불로 대기
-        self.rgb_color_publish(0)
         cr_time = 0
         latency = 0
         while self.is_running:
@@ -362,16 +362,17 @@ class SelfDrivingNode(Node):
                 if crosswalk_area > 2000 and crosswalk_area < 3000 and cr_time <= 0:
                     self.mecanum_pub.publish(Twist())
                     cr_time = time.time()
+                    self.rgb_color_publish(0)
                     time.sleep(1)
                     self.get_logger().info(f"crosswalk stop")
                 elif time.time() - cr_time > 3:
                     cr_time =0 
 
                 if self.start_slow_down:
-                    self.rgb_color_publish(1)
+                    self.rgb_color_publish(3)
                     twist.linear.x = self.slow_down_speed
                 else:
-                    self.rgb_color_publish(3)
+                    self.rgb_color_publish(1)
                     twist.linear.x = self.normal_speed
                     
 
@@ -461,6 +462,8 @@ class SelfDrivingNode(Node):
                     self.mecanum_pub.publish(twist)  
                 else:
                     self.pid.clear()
+                    self.rgb_color_publish(0)
+
 
                 #self.get_logger().info(f"5 : {self.stop} , {self.start_slow_down}")
 
