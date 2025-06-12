@@ -311,19 +311,26 @@ class SelfDrivingNode(Node):
 
                 # if detecting the zebra crossing, start to slow down
                 #self.get_logger().info('\033[1;33m -- %s\033[0m  / %s ' % (self.crosswalk_distance , latency))
+                
                 #횡단 보도 감지 및 감속 
-                if crosswalk_area > 1400 and not self.start_slow_down:  # The robot starts to slow down only when it is close enough to the zebra crossing
+                if crosswalk_area > 1600 and not self.start_slow_down:  # The robot starts to slow down only when it is close enough to the zebra crossing
                     self.start_slow_down = True  # sign for slowing down
                     self.count_slow_down = time.time()  # fixing time for slowing down
                     self.rgb_color_publish(3)
+                    twist.linear.x = self.slow_down_speed
+                    self.mecanum_pub.publish(twist)
+                    continue
                 elif self.start_slow_down and time.time() - self.count_slow_down > 1:  # need to detect continuously, otherwise reset
                     self.start_slow_down = False
                     self.count_slow_down = 0
                     self.rgb_color_publish(1)
-                
+                    twist.linear.x = self.normal_speed
+                    self.mecanum_pub.publish(twist)
+                    continue                
                 #self.get_logger().info(f"2 : {self.stop} , {self.start_slow_down}")
 
-                if crosswalk_area > 1500 and crosswalk_area < 3000 and cr_time <= 0:
+                #횡단보다 멈춤
+                if crosswalk_area > 2000 and crosswalk_area < 3000 and cr_time <= 0:
                     self.mecanum_pub.publish(Twist())
                     cr_time = time.time()
                     time.sleep(1)
@@ -347,12 +354,13 @@ class SelfDrivingNode(Node):
                         # 신호등 빨간색 인지시 및 정지시에 빨간불로 전환
                         self.rgb_color_publish(0)
                     elif self.traffic_signs_status.class_name == 'green':  # If the traffic light is green, the robot will slow down and pass through
-                        twist.linear.x = self.slow_down_speed
+                        #twist.linear.x = self.slow_down_speed
                         self.stop = False
                         # 신호등 초록색 인지시 및 출발시에 초록불로 전환
                         self.rgb_color_publish(1)
-                if not self.stop:  # In other cases where the robot is not stopped, slow down the speed and calculate the time needed to pass through the crosswalk. The time needed is equal to the length of the crosswalk divided by the driving speed
-                    twist.linear.x = self.slow_down_speed
+                
+                #if not self.stop:  # In other cases where the robot is not stopped, slow down the speed and calculate the time needed to pass through the crosswalk. The time needed is equal to the length of the crosswalk divided by the driving speed
+                #    twist.linear.x = self.slow_down_speed
                     #if time.time() - self.count_slow_down > self.crosswalk_length / twist.linear.x:
                     #    self.start_slow_down = False
 
@@ -410,7 +418,7 @@ class SelfDrivingNode(Node):
                             self.pid.SetPoint = 130  # the coordinate of the line while the robot is in the middle of the lane
                             self.pid.update(lane_x)
                             if self.machine_type != 'MentorPi_Acker':
-                                twist.angular.z = twist.linear.x * math.tan(common.set_range(self.pid.output, -0.1, 0.1)) / 0.145
+                                twist.angular.z = common.set_range(self.pid.output, -0.1, 0.1)
                             else:
                                 twist.angular.z = twist.linear.x * math.tan(common.set_range(self.pid.output, -0.1, 0.1)) / 0.145
                         else:
