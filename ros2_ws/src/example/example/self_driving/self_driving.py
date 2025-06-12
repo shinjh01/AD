@@ -513,6 +513,8 @@ class SelfDrivingNode(Node):
                     self.park_x = center[0]
                 elif class_name == 'red' or class_name == 'green':  # obtain the status of the traffic light
                     self.traffic_signs_status = i
+
+                self.get_logger().info(f"========={i.class_name}==========")
                
 
             self.get_logger().info('\033[1;32m%s\033[0m' % class_name)
