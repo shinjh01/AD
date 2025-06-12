@@ -352,14 +352,11 @@ class SelfDrivingNode(Node):
                 # 주행 중
                 if not self.is_stopped_at_crosswalk and self.crosswalk_distance < self.crosswalk_stop_threshold:
                     self.get_logger().info(f"=========stop!!!!!!!!!!!!==========")
-                    #self.stopped_time = time.time()
-
                     self.start_slow_down = True
                     self.mecanum_pub.publish(twist)
                     self.stop = True
                     self.is_stopped_at_crosswalk = True
                     self.enable_crosswalk_detection = False
-                elif not self.enable_crosswalk_detection
 
 
                 """
