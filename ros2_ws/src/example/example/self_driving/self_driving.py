@@ -183,9 +183,16 @@ class SelfDrivingNode(Node):
 
     # added by jw - celebrating for  ending 
     def celebrating_for_ending(self):
-        red_thread = threading.Thread(target=self.blinking_light, args=(5,0))
-        yellow_thread = threading.Thread(target=self.blinking_light, args=(5,3))
-        green_thread = threading.Thread(target=self.blinking_light, args=(5,1))
+        for i in range(5):
+            self.rgb_color_publish(3)
+            time.sleep(0.2)
+            self.led_17_yellow.off()
+            self.rgb_color_publish(0)
+            time.sleep(0.2)
+            self.led_22_red.off()
+            self.rgb_color_publish(1)
+            time.sleep(0.2)
+            self.led_27_green.off()
     
     def blinking_celebrate(self):
         celeb = threading.Thread(target=self.celebrating_for_ending)
@@ -466,6 +473,7 @@ class SelfDrivingNode(Node):
                 # If the robot detects a stop sign and a crosswalk, it will slow down to ensure stable recognition
                     # added by jw
                 if crosswalk_area > 2000 and self.max_park_area > 750:
+                    time.sleep(1)
                     twist = Twist()
                     twist.linear.x = self.slow_down_speed
                     self.mecanum_pub.publish(Twist())  
@@ -483,7 +491,7 @@ class SelfDrivingNode(Node):
                 # line following processing
                 result_image, lane_angle, lane_x = self.lane_detect(binary_image, image.copy())  # the coordinate of the line while the robot is in the middle of the lane
                 if not self.stop:  
-                    if not self.is_turn_right_start and self.max_right_area > 400 and crosswalk_area > 3000:
+                    if not self.is_turn_right_start and self.max_right_area > 500 and crosswalk_area > 3000:
                         self.get_logger().info("Right start")                        
                         self.blinking_turn_light()
                         time.sleep(2)
