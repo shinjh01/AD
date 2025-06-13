@@ -50,6 +50,8 @@ class SelfDrivingNode(Node):
         self.led_22_red = LED(22)
         self.led_27_green = LED(27)
 
+        # added by jow : parking area size list
+        self.park_area_list = [] 
 
         self.fps = fps.FPS()  
         self.image_queue = queue.Queue(maxsize=2)
@@ -103,6 +105,14 @@ class SelfDrivingNode(Node):
         msg.id = 2
         msg.state = 1
         self.button_callback(msg)
+    
+    # added by joowon ad element to list 
+    def add_area_size_to_list(self, park_area):
+        if (len(self.park_area_list)<3):
+            self.park_area_list.append(park_area)
+        else:
+            self.park_area_list.pop(0)
+            self.park_area_list.append(park_area)
 
 
     def button_callback(self, msg):
@@ -309,9 +319,11 @@ class SelfDrivingNode(Node):
     def get_area(self):
         crosswalk_area = self.calc_object_area(self.crosswalk_obj)
         park_area = self.calc_object_area(self.park_obj)
+        # added by jw
+        self.add_area_size_to_list(park_area)
         turn_right_area = self.calc_object_area(self.turn_right_obj)
         if (crosswalk_area > 0 and crosswalk_area < 5000) or park_area > 0 or turn_right_area > 0:
-            self.get_logger().info(f"c : {crosswalk_area}  / p : {park_area} / r : {turn_right_area}")
+            self.get_logger().info(f"c : {crosswalk_area}  / p : {park_area} / r : {turn_right_area} / pl: {self.park_area_list}")
         
         self.crosswalk_obj = None
         self.turn_right_obj = None
@@ -446,7 +458,8 @@ class SelfDrivingNode(Node):
 
                 #주차 표지판 인식.
                 # If the robot detects a stop sign and a crosswalk, it will slow down to ensure stable recognition
-                if crosswalk_area > 2000 and park_area > 700:
+                    # added by jw
+                if crosswalk_area > 2000 and max(self.park_area_list) > 700:
                     twist = Twist()
                     twist.linear.x = self.slow_down_speed
                     self.mecanum_pub.publish(Twist())  
