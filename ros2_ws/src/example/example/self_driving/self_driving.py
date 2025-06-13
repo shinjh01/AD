@@ -207,7 +207,7 @@ class SelfDrivingNode(Node):
         # slow_down_speed는 어떤 대상을 인지할 때 자동 조정 0.5, 0.3 지정
         self.start_slow_down = False  # slowing down sign
         self.normal_speed = 0.2  # normal driving speed
-        self.slow_down_speed = 0.1  # slowing down speed
+        self.slow_down_speed = 0.2  # slowing down speed
 
         self.traffic_signs_status = None  # record the state of the traffic lights
         self.red_loss_count = 0
@@ -323,7 +323,7 @@ class SelfDrivingNode(Node):
         self.add_area_size_to_list(park_area)
         turn_right_area = self.calc_object_area(self.turn_right_obj)
         if (crosswalk_area > 0 and crosswalk_area < 5000) or park_area > 0 or turn_right_area > 0:
-            self.get_logger().info(f"c : {crosswalk_area}  / p : {park_area} / r : {turn_right_area} / pl: {self.park_area_list}")
+            self.get_logger().info(f"area crosswalk_area : {crosswalk_area}  / park_area : {park_area} / turn_right_area : {turn_right_area} / pl: {self.park_area_list}")
         
         self.crosswalk_obj = None
         self.turn_right_obj = None
@@ -413,15 +413,12 @@ class SelfDrivingNode(Node):
                     self.count_slow_down = 0                
                 
                 
-                if crosswalk_area > 2000 and crosswalk_area < 3000 and cr_time <= 0:
+                if crosswalk_area > 2000 and crosswalk_area < 3000:
                     self.mecanum_pub.publish(Twist())
-                    cr_time = time.time()
                     self.rgb_color_publish(0)
                     time.sleep(1)
                     self.get_logger().info(f"crosswalk stop")
-                elif time.time() - cr_time > 3:
-                    cr_time =0 
-
+                
                 if self.start_slow_down:
                     self.rgb_color_publish(3)
                     twist.linear.x = self.slow_down_speed
@@ -483,8 +480,8 @@ class SelfDrivingNode(Node):
                         self.is_turn_right_start = True
                         self.turn_right_time_stamp = time.monotonic() * 1000
                         twist.angular.z =  twist.linear.x * math.tan(-0.6061) / 0.145 #-0.45  # turning speed
-                    elif not self.is_turn_right_start:
-                        self.adjust_to_center(image, binary_image, twist)
+                    #elif not self.is_turn_right_start:
+                    #    self.adjust_to_center(image, binary_image, twist)
                     elif self.is_turn_right_start and (time.monotonic() * 1000) - self.turn_right_time_stamp > 2000:
                         self.turn_right_time_stamp = 0
                         self.is_turn_right_start = False
