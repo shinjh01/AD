@@ -160,6 +160,37 @@ class SelfDrivingNode(Node):
            RGBState(index=1, red=color_value[0], green=color_value[1], blue=color_value[2]) 
         ]
         self.rgb_publisher.publish(msg)
+    
+    # added by jw - yellow blinking for turn right  
+    def blinking_light(self, times, color_number):
+        if color_number == 3:
+            led_now = self.led_17_yellow
+        elif color_number == 1:
+            led_now = self.led_27_green
+        elif color_number == 0:
+            led_now = self.led_22_red
+ 
+        for i in range(times):
+            self.rgb_color_publish(color_number)
+            time.sleep(0.2)
+            led_now.off()
+            time.sleep(0.2)
+
+    def blinking_turn_light(self): 
+        yellow_thread = threading.Thread(target=self.blinking_light,args= (5,3))
+        yellow_thread.start()
+        
+
+    # added by jw - celebrating for  ending 
+    def celebrating_for_ending(self):
+        red_thread = threading.Thread(target=self.blinking_light, args=(5,0))
+        yellow_thread = threading.Thread(target=self.blinking_light, args=(5,3))
+        green_thread = threading.Thread(target=self.blinking_light, args=(5,1))
+    
+    def blinking_celebrate(self):
+        celeb = threading.Thread(target=self.celebrating_for_ending)
+        celeb.start()
+        
 
     def init_process(self):
         self.timer.cancel()
@@ -312,8 +343,8 @@ class SelfDrivingNode(Node):
         time.sleep(0.38/0.2)
 
         self.mecanum_pub.publish(Twist())
+        self.blinking_celebrate()
         self.exit_srv_callback(Trigger.Request(), Trigger.Response()) 
-        self.rgb_color_publish(2)
 
     def calc_object_area(self, obj): 
         if obj == None:
@@ -347,49 +378,7 @@ class SelfDrivingNode(Node):
         self.park_obj = None
 
         return crosswalk_area, park_area, turn_right_area
-    
-
-    def adjust_to_center(self, image, binary_image, twist):
-        """
-        차선 중심 기준으로 차량을 도로 중앙에 정렬하도록 조정합니다.
-        - 상단 y=1 라인에서 좌우 픽셀 수 차이에 따라 angular.z를 조정합니다.
-        - 우회전 중일 경우 이 메서드는 동작하지 않습니다.
-        """
-        if self.is_turn_right_start:
-            return  # 우회전 중이면 조향 조정 하지 않음
-
-        h, w = image.shape[:2]
-        center_x = w // 2
-
-        # 상단 1줄 기준으로 좌우 영역 픽셀 수 계산
-        row = binary_image[1]  # 상단 y=1 줄 기준
-
-        left_portion = row[:center_x]
-        right_portion = row[center_x:]
-
-        left_yellow_count = np.count_nonzero(left_portion)
-        right_yellow_count = np.count_nonzero(right_portion)
-
-        diff = left_yellow_count - right_yellow_count
-
-        # 중심각 보정값 계산 (atan2 사용)
-        correction = math.atan2(2 * diff, w)
-
-        # 회전 조정
-        if self.machine_type != 'MentorPi_Acker':
-            twist.angular.z += correction
-        else:
-            twist.angular.z = twist.linear.x * math.tan(correction) / 0.145
-
-        # 감속
-        twist.linear.x = self.slow_down_speed * 0.8
-
-        # 디버깅 로그 출력
-        self.get_logger().info(
-            f"[Center Adjust] Left: {left_yellow_count}, Right: {right_yellow_count}, "
-            f"Diff: {diff}, Corr: {correction:.4f} rad"
-        )
-
+   
     def main(self):
         self.get_logger().info('\033[1;32m -0- %s\033[0m' % self.machine_type)
         # 프로그램 진입시 빨간불로 대기
@@ -496,6 +485,7 @@ class SelfDrivingNode(Node):
                 if not self.stop:  
                     if not self.is_turn_right_start and self.max_right_area > 400 and crosswalk_area > 3000:
                         self.get_logger().info("Right start")                        
+                        self.blinking_turn_light()
                         time.sleep(2)
                         self.is_turn_right_start = True
                         self.turn_right_time_stamp = time.monotonic() * 1000
@@ -520,8 +510,10 @@ class SelfDrivingNode(Node):
                             self.count_turn = 0
                             self.start_turn_time_stamp = time.time()
                         if self.machine_type != 'MentorPi_Acker':
+                            self.blinking_turn_light()
                             twist.angular.z =  twist.linear.x * math.tan(-0.6061) / 0.145 #-0.45  # turning speed
                         else:
+                            self.blinking_turn_light()
                             twist.angular.z = twist.linear.x * math.tan(-0.5061) / 0.145
                     else:  # use PID algorithm to correct turns on a straight road
                         self.count_turn = 0
