@@ -53,6 +53,11 @@ class SelfDrivingNode(Node):
         # added by jow : parking area size list
         self.park_area_list = [] 
 
+        ## added by jw
+        self.right_area_list = [] 
+        self.max_park_area = 0
+        self.max_right_area = 0
+
         self.fps = fps.FPS()  
         self.image_queue = queue.Queue(maxsize=2)
         self.classes = ['go', 'right', 'park', 'red', 'green', 'crosswalk']
@@ -107,12 +112,12 @@ class SelfDrivingNode(Node):
         self.button_callback(msg)
     
     # added by joowon ad element to list 
-    def add_area_size_to_list(self, park_area):
-        if (len(self.park_area_list)<3):
-            self.park_area_list.append(park_area)
+    def add_area_size_to_list(self,area_list, area):
+        if (len(area_list)<3):
+            area_list.append(area)
         else:
-            self.park_area_list.pop(0)
-            self.park_area_list.append(park_area)
+            area_list.pop(0)
+            area_list.append(area)
 
 
     def button_callback(self, msg):
@@ -207,7 +212,7 @@ class SelfDrivingNode(Node):
         # slow_down_speed는 어떤 대상을 인지할 때 자동 조정 0.5, 0.3 지정
         self.start_slow_down = False  # slowing down sign
         self.normal_speed = 0.2  # normal driving speed
-        self.slow_down_speed = 0.1  # slowing down speed
+        self.slow_down_speed = 0.2  # slowing down speed
 
         self.traffic_signs_status = None  # record the state of the traffic lights
         self.red_loss_count = 0
@@ -320,10 +325,22 @@ class SelfDrivingNode(Node):
         crosswalk_area = self.calc_object_area(self.crosswalk_obj)
         park_area = self.calc_object_area(self.park_obj)
         # added by jw
-        self.add_area_size_to_list(park_area)
+        self.add_area_size_to_list(self.park_area_list,park_area)
         turn_right_area = self.calc_object_area(self.turn_right_obj)
+
+        if (max(self.park_area_list) > 0):
+            if( self.max_park_area < max(self.park_area_list)):
+               self.max_park_area = max(self.park_area_list)
+
+        # added by jw
+        self.add_area_size_to_list(self.right_area_list, turn_right_area)
+
+        if(max(self.right_area_list) > 0):
+               if(self.max_right_area < max(self.right_area_list)):
+                  self.max_right_area = max(self.right_area_list)
+
         if (crosswalk_area > 0 and crosswalk_area < 5000) or park_area > 0 or turn_right_area > 0:
-            self.get_logger().info(f"c : {crosswalk_area}  / p : {park_area} / r : {turn_right_area} / pl: {self.park_area_list}")
+            self.get_logger().info(f"c : {crosswalk_area}  / p : {park_area} / mp : {self.max_park_area} pl:{self.park_area_list} / r : {turn_right_area} / mr : { self.max_right_area} / rl: {self.right_area_list}")
         
         self.crosswalk_obj = None
         self.turn_right_obj = None
@@ -459,7 +476,7 @@ class SelfDrivingNode(Node):
                 #주차 표지판 인식.
                 # If the robot detects a stop sign and a crosswalk, it will slow down to ensure stable recognition
                     # added by jw
-                if crosswalk_area > 2000 and max(self.park_area_list) > 700:
+                if crosswalk_area > 2000 and self.max_park_area > 750:
                     twist = Twist()
                     twist.linear.x = self.slow_down_speed
                     self.mecanum_pub.publish(Twist())  
@@ -477,19 +494,23 @@ class SelfDrivingNode(Node):
                 # line following processing
                 result_image, lane_angle, lane_x = self.lane_detect(binary_image, image.copy())  # the coordinate of the line while the robot is in the middle of the lane
                 if not self.stop:  
-                    if not self.is_turn_right_start and turn_right_area > 500 and crosswalk_area > 3000:
+                    if not self.is_turn_right_start and self.max_right_area > 400 and crosswalk_area > 3000:
                         self.get_logger().info("Right start")                        
                         time.sleep(2)
                         self.is_turn_right_start = True
                         self.turn_right_time_stamp = time.monotonic() * 1000
                         twist.angular.z =  twist.linear.x * math.tan(-0.6061) / 0.145 #-0.45  # turning speed
-                    elif not self.is_turn_right_start:
-                        self.adjust_to_center(image, binary_image, twist)
-                    elif self.is_turn_right_start and (time.monotonic() * 1000) - self.turn_right_time_stamp > 2000:
+                        self.max_right_area = 0 
+                        self.right_area_list = [] 
+                    #elif not self.is_turn_right_start:
+                    #    self.adjust_to_center(image, binary_image, twist)
+                    elif self.is_turn_right_start and (time.monotonic() * 1000) - self.turn_right_time_stamp > 1700: # 2000
                         self.turn_right_time_stamp = 0
                         self.is_turn_right_start = False
                         self.get_logger().info("Right End")
-                    elif self.is_turn_right_start and (time.monotonic() * 1000) - self.turn_right_time_stamp <= 2000:
+                        self.max_right_area = 0
+                        self.right_area_list = [] 
+                    elif self.is_turn_right_start and (time.monotonic() * 1000) - self.turn_right_time_stamp <= 1700: # 2000
                         twist.angular.z =  twist.linear.x * math.tan(-0.6061) / 0.145 #-0.45  # turning speed
                         self.get_logger().info("Right ing")
                     elif lane_x > 130:  
