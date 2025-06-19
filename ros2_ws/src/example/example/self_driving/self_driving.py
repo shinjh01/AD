@@ -31,56 +31,111 @@ from ros_robot_controller_msgs.msg import BuzzerState, SetPWMServoState, PWMServ
 from ros_robot_controller_msgs.msg import RGBStates, RGBState, ButtonState
 ####
 
+############# 
+# 메인 돌때 이미지가 1프레임이 들어옴. 
+#이 이미지에서 횡단보도를 찾아야하는데 거리가 멀거나 회전시 횡단보도가 찌그러져 보이므로
+# 해당 이미지를 펴준다. 
+# 1. 640,480 이미지 중에 특정 영역을 사다리꼴로 지정 
+# (해당 부분은 실제 들어온 이미지를 참고하여 하드코딩)
+# 2. 해당 부분의 사다리꼴을 직사각형의 이미지를 변환.
+#############
 def warp_perspective(image):
     h, w = image.shape[:2]
 
     # 1. 원근 변환을 위한 4점 (실제 테스트 환경에 따라 수동 튜닝 필요)
+    # 횡단보다가 해당 위치에 찌그러져서 존재한다는 가정을 하고 해당 위치의 관심 구역을 추가 
+    # 펴고 싶은 사다리꼴 영역의 네 꼭짓점 좌표
     src = np.float32([
-        [w * 0.1, h * 0.8],
-        [w * 0.9, h * 0.8],
-        [w * 0.6, h * 0.6],
-        [w * 0.4, h * 0.6]
+        [w * 0.1, h * 0.8], # w 64, h 384
+        [w * 0.9, h * 0.8], # 576, 384
+        [w * 0.6, h * 0.6], # 384, 288,
+        [w * 0.4, h * 0.6]  # 256, 288 
     ])
+
+    # 변환후에 내가 보고 싶은 직사각형의 모양 
     dst = np.float32([
-        [w * 0.2, h],
+        [w * 0.2, h], 
         [w * 0.8, h],
         [w * 0.8, 0],
         [w * 0.2, 0]
     ])
 
-    matrix = cv2.getPerspectiveTransform(src, dst)
-    warped = cv2.warpPerspective(image, matrix, (w, h))
+    matrix = cv2.getPerspectiveTransform(src, dst) # 변환 행렬 계산 
+    warped = cv2.warpPerspective(image, matrix, (w, h)) # 사다리꼴을 직사각형으로 변환
 
     return warped
 
-
+############# 
+# warp_perspective 에서 직사각형에 처리된 이미지 내에 횡단보고가 있는지 처리.
+# #횡단보도 open cv로 디텍팅.
+# param : 횡단보도 원본 이미지
+# return : 횡단보도 디텍팅오브젝트 / 횡단보도 원본이미지
+############# 
 def detect_crosswalk_v2(image):
     original = image.copy()
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
-    # 1. 흰색 마스크 (HSV 기반)
-    lower_white = np.array([0, 0, 180])
-    upper_white = np.array([180, 40, 255])
+    # 1. 흰색 마스크 (HSV 기반) - 색상/채도/ 명도
+    # ● RGB와 HSV의 차이
+    #   RGB는 색상을 빨강(R), 초록(G), 파랑(B) 값으로 표현합니다.
+    #   HSV는 색상(Hue), 채도(Saturation), 명도(Value)로 표현합니다.
+    # ● 흰색 검출에 HSV가 유리한 이유
+    #   흰색은 RGB에서 R, G, B 값이 모두 높을 때 나타나지만,
+    #   조명, 그림자, 카메라 노이즈 등으로 인해 RGB 값만으로 흰색을 정확히 구분하기 어렵습니다.
+    #   HSV에서는 흰색이 "채도(S)가 낮고, 명도(V)가 높음"이라는 특징이 있습니다.
+    #   즉, 색상(H)은 상관없고, S(채도)는 낮고, V(명도)는 높으면 흰색 계열로 볼 수 있습니다.
+
+    # H(색상): 0 ~ 180 (전체 색상 범위, 흰색은 색상에 영향 없음)
+    # S(채도): 0 ~ 40 (채도가 낮아야 흰색, 즉 거의 무채색)
+    # V(명도): 180 ~ 255 (명도가 높아야 흰색, 즉 밝은 색)
+    # 즉, 이 마스크는 "채도가 낮고 밝은 픽셀"만 남깁니다.
+    # → 흰색 실선(횡단보도, 차선 등)만 효과적으로 추출할 수 있습니다.
+
+    lower_white = np.array([0, 0, 180]) # 왜 0,0,180 인가?
+    upper_white = np.array([180, 40, 255]) #왜?
     mask = cv2.inRange(hsv, lower_white, upper_white)
 
     # 2. Morphology로 잡음 제거 + 채우기
-    kernel = np.ones((5, 5), np.uint8)
+    # 연산 범위를 결정합니다. (5x5 픽셀 영역)
+    kernel = np.ones((5, 5), np.uint8) 
+
+    #모폴로지 클로징(Close) 연산을 적용합니다.
+    #클로징이란?
+    #팽창(Dilation) 후 침식(Erosion)
+    #작은 구멍(검은 점)이나 끊어진 부분을 메워줍니다.
+    #역할:
+    #횡단보도 실선이 끊어져 있거나, 작은 검은 점(노이즈)이 있을 때 이를 메워서 실선을 더 잘 검출할 수 있게 합니다.
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+
+    #     설명:
+    # 모폴로지 오프닝(Open) 연산을 적용합니다.
+    # 오프닝이란?
+    # 침식(Erosion) 후 팽창(Dilation)
+    # 작은 흰 점(노이즈)을 제거합니다.
+    # 역할:
+    # 배경에 남아있는 작은 흰색 노이즈(점, 잡음)를 제거해서 실선만 남기기 쉽게 만듭니다.
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
 
-    # 3. 컨투어 추출
+    # 3. 컨투어 추출 - (윤곽선)
+    # 이 코드는 이진화된 마스크 이미지에서 외곽선(윤곽선, contour)을 찾는 함수입니다.
+    # 횡단보도 흰색 실선이 잘 추출되어 있다면, 실선마다 하나씩 컨투어가 검출됩니다.
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     vertical_boxes = []
     for cnt in contours:
+        #한 윤관석의 좌표 추출
         x, y, w, h = cv2.boundingRect(cnt)
 
+        #좌표 비율
         aspect_ratio = h / float(w + 1e-5)
         area = w * h
 
         # 조건: 세로형 직사각형 + 크기 제한
+        #→ 세로로 긴(높이가 너비보다 1.5~10배 크고), 면적이 500픽셀 이상인 컨투어만 선택합니다.
         if 1.5 < aspect_ratio < 10 and area > 500:
+            #조건에 맞는 정보만 배열에 넣기
             vertical_boxes.append((x, y, w, h))
+            #시각화
             cv2.rectangle(original, (x, y), (x+w, y+h), (0, 255, 0), 2)
 
     # 4. 수직 패턴 개수가 충분하면 횡단보도
@@ -100,6 +155,7 @@ class SelfDrivingNode(Node):
         self.is_running = True
         self.pid = pid.PID(0.4, 0.0, 0.05)
         self.param_init()
+        # LED통신을 위한 소켓 연동.(port연결)
         self.HOST = '127.0.0.1'  # LTS 250610
         self.PORT = 65432        # LTS 250610
         
@@ -126,7 +182,7 @@ class SelfDrivingNode(Node):
         self.servo_state_pub = self.create_publisher(SetPWMServoState, 'ros_robot_controller/pwm_servo/set_state', 1)
         self.result_publisher = self.create_publisher(Image, '~/image_result', 1)
         
-        #### my add#######################################################################################
+        #### LED RGB
         self.rgb_pub= self.create_publisher(RGBStates, '/ros_robot_controller/set_rgb', 10)
         self.get_logger().info('RGB Controller Node has been started.')
         
@@ -164,7 +220,7 @@ class SelfDrivingNode(Node):
         
         # Define the directory to save images
         self.IMAGE_SAVE_DIR = "logimage"  # Saving images in the 'logimage' folder
-
+        ### 버튼 클릭 처리 가능하도록 구독시작
         ###################################################################################################
         self.create_subscription(ButtonState, '/ros_robot_controller/button', self.button_callback, 10)
         self.get_logger().info('ButtonPressReceiver node started')
@@ -214,6 +270,9 @@ class SelfDrivingNode(Node):
         self.blinking_active = True
         self._blink_right_led_toggle(interval, duration)
 
+    ############# 
+    # #우회전 LED 토글(깜빡임)
+    ############# 
     def _blink_right_led_toggle(self, interval, duration):
         if not self.blinking_active:
             return
@@ -237,6 +296,9 @@ class SelfDrivingNode(Node):
         self.blinking_timer = threading.Timer(interval, self._blink_right_led_toggle, args=[interval, duration])
         self.blinking_timer.start()
     
+    ############# 
+    # # 드라이빙 멈춤
+    ############# 
     def stop_driving(self):
         self.start = False  # 주행 정지
         self.mecanum_pub.publish(Twist())  # 멈추기 위한 Twist 명령
@@ -251,7 +313,9 @@ class SelfDrivingNode(Node):
     #     self.set_running_srv_callback(request, SetBool.Response())  # 주행 재개
     #     self.get_logger().info('Driving has been resumed.')
         
-        
+    ############# 
+    # # 시작 종료 버튼용 콜백 함수. 
+    #############         
     def button_callback(self, msg):
         if msg.id == 1:
             self.process_button_press('Button 1', msg.state)
@@ -295,6 +359,9 @@ class SelfDrivingNode(Node):
             self.send_request(self.start_yolov5_client, Trigger.Request())
         time.sleep(1)
         
+        ############# 
+        # # ROS 시작시 enter_srv_callbak제거 (버튼 클릭시 작동 되도록)
+        ############# 
         if False:#self.get_parameter('start').value:
             self.display = True
             self.enter_srv_callback(Trigger.Request(), Trigger.Response())
@@ -312,6 +379,9 @@ class SelfDrivingNode(Node):
         self.enter = False
         self.right = True
 
+        ############# 
+        # # 우회전 감지를 위한 파라미터
+        ############# 
         self.right_turn_state = "IDLE"
         self.right_detect_time = 0.0    # 감지된 시점
         self.right_front_flag = False
@@ -417,7 +487,9 @@ class SelfDrivingNode(Node):
             self.image_queue.get()
         # put the image into the queue
         self.image_queue.put(rgb_image)
-        
+############# 
+# # 뎁스 카메라 사용X
+#############         
     def depth_image_callback(self, ros_image):  # callback target checking
         cv_depth = self.bridge.imgmsg_to_cv2(ros_image, "16UC1")
         #self.get_logger().info('Depth value at (200, 200): %d' % cv_depth[200, 200])
@@ -428,6 +500,10 @@ class SelfDrivingNode(Node):
         #     self.image_queue.get()
         # # put the image into the queue
         # self.image_queue.put(rgb_image)
+
+############# 
+# # 우회전.
+#############
     def turn_right_action(self):
         self.get_logger().info("\033[1;34m[우회전 실행 - 자연 회전]\033[0m")
         self.rgb_pub.publish(self.msg_right)
@@ -451,41 +527,10 @@ class SelfDrivingNode(Node):
         self.start_turn_right = True
         self.turn_right_start_time = time.time()
 
-        
-        
-    # def turn_right_action(self):
-    #     self.get_logger().info("\033[1;34m[우회전 실행]\033[0m")
-    #     self.rgb_pub.publish(self.msg_right)  # 우회전 LED on
-    #     twist = Twist()
-    #     if self.machine_type == 'MentorPi_Mecanum':
-    #         # 정지 후 제자리에서 회전
-    #         self.mecanum_pub.publish(Twist())
-    #         time.sleep(0.5)
-
-    #         twist.angular.z = -0.8  # 음수는 우회전
-    #         self.mecanum_pub.publish(twist)
-    #         time.sleep(1.6)  # 조정 가능
-    #         self.mecanum_pub.publish(Twist())
-
-    #     elif self.machine_type == 'MentorPi_Acker':
-    #         # Ackermann 방식은 회전 반경을 계산해서 움직여야 함
-    #         twist.linear.x = 0.15
-    #         twist.angular.z = twist.linear.x * math.tan(-0.5061) / 0.145
-    #         self.mecanum_pub.publish(twist)
-    #         time.sleep(2.5)
-    #         self.mecanum_pub.publish(Twist())
-        
-    #     else:
-    #         # Default: 제자리에서 우회전
-    #         twist.angular.z = -0.8
-    #         self.mecanum_pub.publish(twist)
-    #         time.sleep(1.5)
-    #         self.mecanum_pub.publish(Twist())
-        
-    #     #self.have_turn_right = False
-    #     self.rgb_pub.publish(self.msg_off)  # 우회전 LED on
-    #     self.last_crosswalk_pause_time = current_time
-    #     self.get_logger().info("\033[1;32m[우회전 완료]\033[0m")
+    
+############# 
+# # 붉은 색.
+############# 
     def red_detection(self,image):
         #image = cv2.imread('sample.jpg')  # 이미지 경로 지정
         lab_image = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
@@ -544,6 +589,9 @@ class SelfDrivingNode(Node):
             self.mecanum_pub.publish(twist)
             time.sleep(1.5)
         self.mecanum_pub.publish(Twist())
+############# 
+# # 주차 후 깜빡임
+############# 
         while(True):
             self.send_message("redoff")
             self.send_message("greenoff")
@@ -575,31 +623,48 @@ class SelfDrivingNode(Node):
                 binary_image = self.lane_detect.get_binary(image)
 
                 twist = Twist()
-                
+############# 
+# #횡단보도 플래그 이고 감지 시간 1.1초 이하시 멈춤
+############# 
+
                 if (self.crosswalk_stop == True) and time.time() - self.crosswalk_stop_time <= 1.1:
                     twist.linear.x = 0.0
                     twist.angular.z = 0.0
                     self.mecanum_pub.publish(twist)
                     continue
+############# 
+# #횡단보도 플래그 이고 감지 시간 1.1초 이상이면 진행
+############# 
                 elif (self.crosswalk_stop == True) and time.time() - self.crosswalk_stop_time > 1.1:
                     self.crosswalk_stop = False
                     self.send_message("redoff")
                     self.send_message("greenon")
-                    
+############# 
+# #우회 전 상태처리
+
+############# 
                 # 우회전 상태 처리
                 if self.right_turn_state == "DETECTED":
+                    #### 우회전 표지판 디텍팅되었지만 우회전 시작 전이면 시작
                     if self.right_front_flag == False:
                         self.right_detect_time = time.time()
                         self.right_front_flag = True
+                    #### 우회전 시작 후 1.5초 내라면 z축에 0.2로 추가 후 continue    
                     if time.time() - self.right_detect_time <= 1.5:
                         twist.linear.x = 0.25
                         twist.angular.z = 0.2      # lts 250613 0 -> 0.2, continue 추가
                         self.mecanum_pub.publish(twist)
                         continue
-                    else:    
+                    #### 우회전 완료되었다면 TURNING으로 2번이상 우회전 되지 않도록 처리
+                    else:   
                         self.turn_right_start_time = time.time()
                         self.right_turn_state = "TURNING"
                         self.right_front_flag = False
+
+############# 
+# # 우회전 완료 후 1.7초 후라면 z축 0으로 해주고
+# x축에 노말 스피드. 
+############# 
 
                 if self.right_turn_state == "TURNING":
                     if time.time() - self.turn_right_start_time >= 1.7:
@@ -611,6 +676,7 @@ class SelfDrivingNode(Node):
                         #self.rgb_pub.publish(self.msg_off)
                         self.get_logger().info("\033[1;32m[turn right end]\033[0m")
                         self.right_turn_state = "DONE"
+                    ### 아니라면 -0.65 각도로 우회전(왜?)    
                     else:
                         twist = Twist()
                         twist.linear.x = 0.2
@@ -622,43 +688,26 @@ class SelfDrivingNode(Node):
 
                 # if detecting the zebra crossing, start to slow down
                 current_time = time.time()
-                #self.get_logger().info('\033[1;33m%s\033[0m' % self.crosswalk_distance)
-                ########################################## 로깅
-                # if self.crosswalk_distance > 1:
-                #     if not os.path.exists(self.IMAGE_SAVE_DIR):
-                #         os.makedirs(self.IMAGE_SAVE_DIR)
-
-                #     result_image = image.copy()
-                #     # bounding box 그리기
-                #     if self.objects_info:
-                #         for obj in self.objects_info:
-                #             box = obj.box
-                #             class_name = obj.class_name
-                #             cls_conf = obj.score
-                #             cls_id = self.classes.index(class_name)
-                #             color = colors(cls_id, True)
-                #             plot_one_box(
-                #                 box,
-                #                 result_image,
-                #                 color=color,
-                #                 label="{}:{:.2f}".format(class_name, cls_conf),
-                #             )
-
-                #     result_image_bgr = cv2.cvtColor(result_image, cv2.COLOR_RGB2BGR)
-                #     timestamp = time.strftime("%Y%m%d_%H%M%S")
-                #     filename = os.path.join(self.IMAGE_SAVE_DIR, f"crosswalk_debug_{timestamp}.png")
-                #     cv2.imwrite(filename, result_image_bgr)
-                #     self.get_logger().info(f"[디버그 이미지 저장] 횡단보도 감지 거리: {self.crosswalk_distance} → {filename}")
-                ##############################################################
+              
+############# 
+# # 우회 전 후 1.7초간 직진까지 완료되면 횡단보도 추출
+############# 
                 if self.right_turn_state == "DONE":
                     warped_img = warp_perspective(result_image)
                     cross_detected , _ = detect_crosswalk_v2(warped_img)
                 else:
+############# 
+# # 그 외 상황에서는 3프레임 이후(메인 반복문이 3번씩 돌때마다) 횡단보도 디텍팅 추출
+############# 
                     if self.main_count % 3 == 0:
                         warped_img = warp_perspective(result_image)
                         cross_detected , _ = detect_crosswalk_v2(warped_img)
                     else:
                         cross_detected = False 
+
+############# 
+# # 횡단보도 디텍팅 시 횡단보도 디텍팅 처리 시작(상단 코드에서 진행.)
+#############                         
                 if cross_detected and (current_time - self.last_crosswalk_pause_time > 1.5): #and not self.start_slow_down:  # The robot starts to slow down only when it is close enough to the zebra crossing 250613 LTS 
                     self.send_message("redon")
                     self.send_message("greenoff")
@@ -669,35 +718,10 @@ class SelfDrivingNode(Node):
                     self.crosswalk_count += 1
                     continue
                 
-                # if False:#cross_detected and (current_time - self.last_crosswalk_pause_time > 4): #and not self.start_slow_down:  # The robot starts to slow down only when it is close enough to the zebra crossing
-                #     self.send_message("redon")
-                #     self.send_message("greenoff")
-                #     self.start = False  # 주행 정지
-                #     self.mecanum_pub.publish(Twist())  # 멈추기 위한 Twist 명령
-                #     self.get_logger().info('Driving has been stopped.')
-                    
-                #     time.sleep(0.5)
-                    
-                #     self.start = True  # 주행 시작
-                #     self.send_message("redoff")
-                #     self.send_message("greenon")
-                #     request = SetBool.Request()
-                #     request.data = True
-                #     self.set_running_srv_callback(request, SetBool.Response())  # 주행 재개
-                #     self.get_logger().info('Driving has been resumed.')
-                #     # self.stop = True
-                #     self.last_crosswalk_pause_time = current_time
-                #     self.get_logger().info('\033[1;33m%s\033[0m' % self.count_crosswalk)
-                #     # time.sleep(0.5)
-                #     # self.stop = False
-                    
-                #     if self.count_crosswalk == 3:  # judge multiple times to prevent false detection
-                #         self.count_crosswalk = 0
-                #         #self.stop = True
-                #         self.start_slow_down = True  # sign for slowing down
-                #         self.count_slow_down = time.time()  # fixing time for slowing down
-                # else:  # need to detect continuously, otherwise reset
-                #     self.count_crosswalk = 0
+
+############# 
+# #신호등 처리
+############# 
 
                 # deceleration processing
                 #if self.start_slow_down:
@@ -724,24 +748,14 @@ class SelfDrivingNode(Node):
                         self.send_message("redoff")
                         self.send_message("greenon")
                         self.get_logger().info("\033[33mgreen\033[0m")
-                    #else:
-                    #    self.stop = False
-                    #    twist.linear.x = self.normal_speed  # go straight with normal speed
                 else:
                     twist.linear.x = self.normal_speed 
                     self.stop = False
-                    #twist.linear.x = self.slow_down_speed
-                # else:
-                #     self.stop = True
-                #     if time.time() - self.count_slow_down > 1:
-                #         self.stop = False
-                    # if not self.stop:  # In other cases where the robot is not stopped, slow down the speed and calculate the time needed to pass through the crosswalk. The time needed is equal to the length of the crosswalk divided by the driving speed
-                    #     twist.linear.x = self.slow_down_speed
-                    #     if time.time() - self.count_slow_down > self.crosswalk_length / twist.linear.x:
-                    #         self.start_slow_down = False
-                #else:
-                #    twist.linear.x = self.normal_speed  # go straight with normal speed
 
+
+############# 
+# #우회전 종료됴ㅚ고 횡단보도 판별되고 park가 표지판 디텍팅시에
+############# 
                 # If the robot detects a stop sign and a crosswalk, it will slow down to ensure stable recognition
                 if 0 < self.park_x and cross_detected and self.right_turn_state == "DONE":
                     self.mecanum_pub.publish(Twist())  
@@ -769,7 +783,7 @@ class SelfDrivingNode(Node):
                 
                 # 250613 lts
                 if lane_x >= 0 and not self.stop:  
-                    if lane_x > 140: 
+                    if lane_x > 140: #우회전 차선 크기 변경 150 -> 140
                         self.count_turn += 1
                         if self.count_turn > 5 and not self.start_turn:
                             self.start_blinking_right_led()
@@ -858,7 +872,7 @@ class SelfDrivingNode(Node):
             if self.right_turn_state == "IDLE" and self.crosswalk_count >= 3:
                 self.right_turn_state = "DETECTED"
                 self.right_detect_time = time.time()
-            self.count_right += 1
+            self.count_right += 1 # 해당 플래그 사용안함.
             self.count_right_miss = 0
             if self.count_right >= 5:
                 self.turn_right = True
@@ -872,98 +886,14 @@ class SelfDrivingNode(Node):
 
         elif class_name in ['red', 'green']:
             self.traffic_signs_status = top_obj
-
-        # go가 아닌 경우, 그리고 우회전이 완료되지 않은 경우만 park_x 무효화
+############# 
+# go가 아닌 경우, 그리고 우회전이 완료되지 않은 경우만 park_x 무효화
+############# 
+        # 
         if class_name != 'go' and self.right_turn_state != "DONE":
             self.park_x = -1
 
         self.get_logger().info('\033[1;32m%s\033[0m' % class_name)
-
-    # Obtain the target detection result
-    def get_object_callback_backup(self, msg):
-        go_sign = False
-        self.objects_info = msg.objects
-        if self.objects_info == []:  # If it is not recognized, reset the variable
-            self.traffic_signs_status = None
-            self.crosswalk_distance = 0
-        else:
-            min_distance = 0
-            for i in self.objects_info:
-                class_name = i.class_name
-                center = (int((i.box[0] + i.box[2])/2), int((i.box[1] + i.box[3])/2))
-                
-                if class_name == 'crosswalk':  
-                    if center[1] > min_distance:  # Obtain recent y-axis pixel coordinate of the crosswalk
-                        min_distance = center[1]
-                elif class_name == 'right':  # obtain the right turning sign
-                    if self.right_turn_state == "IDLE" and self.crosswalk_count >= 3:
-                        self.right_turn_state = "DETECTED"
-                        self.right_detect_time = time.time()
-                    #self.turn_right = True
-                    #self.turn_right_action()
-                    self.count_right += 1
-                    self.count_right_miss = 0
-                    if self.count_right >= 5:  # If it is detected multiple times, take the right turning sign to true
-                        self.turn_right = True
-                        self.count_right = 0
-                elif class_name == 'go':  # obtain the center coordinate of the go sign
-                    go_sign = True
-                elif class_name == 'park':  # obtain the center coordinate of the parking sign
-                    self.park_x = center[0]
-                elif class_name == 'red' or class_name == 'green':  # obtain the status of the traffic light
-                    self.traffic_signs_status = i
-               
-
-            self.get_logger().info('\033[1;32m%s\033[0m' % class_name)
-            #self.crosswalk_distance = min_distance
-            if go_sign != True and self.right_turn_state != "DONE":
-                self.park_x = -1
-            # If objects are detected, process and save the image
-            if False:#self.objects_info:
-                # Make sure the 'logimage' directory exists
-                if not os.path.exists(self.IMAGE_SAVE_DIR):
-                    os.makedirs(self.IMAGE_SAVE_DIR)
-
-                # Fetch the most recent image from the queue (last processed image)
-                result_image = self.image_queue.queue[-1] if not self.image_queue.empty() else None
-
-                if result_image is not None:
-                    detected_classes = set()  # 중복 제거를 위한 집합
-
-                    # Draw bounding boxes around detected objects
-                    for obj in self.objects_info:
-                        box = obj.box
-                        class_name = obj.class_name
-                        cls_conf = obj.score
-                        cls_id = self.classes.index(class_name)
-                        color = colors(cls_id, True)  # Get color for the bounding box
-
-                        detected_classes.add(class_name)  # 클래스명 추가
-
-                        # Draw the bounding box
-                        plot_one_box(
-                            box,
-                            result_image,
-                            color=color,
-                            label="{}:{:.2f}".format(class_name, cls_conf),
-                        )
-
-                    # Convert the result image from RGB to BGR (OpenCV uses BGR format)
-                    result_image_bgr = cv2.cvtColor(result_image, cv2.COLOR_RGB2BGR)
-
-                    # Create a string from detected class names (e.g., "person_car_dog")
-                    class_string = "_".join(sorted(detected_classes))
-
-                    # Create a filename with the current timestamp and class names
-                    timestamp = time.strftime("%Y%m%d_%H%M%S")
-                    filename = os.path.join(
-                        self.IMAGE_SAVE_DIR, f"detected_{class_string}_{timestamp}.png"
-                    )
-
-                    # Save the image to disk
-                    cv2.imwrite(filename, result_image_bgr)
-                    self.get_logger().info(f"Image saved to {filename}")
-
 
 def main():
     node = SelfDrivingNode('self_driving')
